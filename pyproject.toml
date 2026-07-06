@@ -20,6 +20,7 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "z3-solver>=4.12"]  # z3 backs the differential engine test
+mcp = ["mcp[cli]>=1.2"]                    # for the demo gate server (mcp_server.py)
 
 [tool.setuptools.packages.find]
 where = ["src"]
