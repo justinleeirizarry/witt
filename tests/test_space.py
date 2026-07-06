@@ -8,7 +8,7 @@ drawn from impossible ones.
 """
 
 import pytest
-from truthgate import TruthTableEngine, Supervisor
+from witt import TruthTableEngine, Supervisor
 
 
 @pytest.fixture

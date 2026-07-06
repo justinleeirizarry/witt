@@ -9,7 +9,7 @@ decomposition so it scales past the 2^22 enumeration wall.
 """
 
 import pytest
-from truthgate import TruthTableEngine
+from witt import TruthTableEngine
 
 
 @pytest.fixture

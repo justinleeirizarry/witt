@@ -1,11 +1,11 @@
 """
-truthgate — Deterministic logic validation for AI agents.
+witt — Deterministic logic validation for AI agents.
 
 A truth table engine that sits between an agent's decision and
 execution. Catches invalid tool calls (missing prerequisites, missing
 params, unconfirmed destructive actions) before they run.
 
-    from truthgate import Supervisor, generate_rules
+    from witt import Supervisor, generate_rules
 
     engine = generate_rules(tools, dependencies={"summarize": ["search"]})
     gate = Supervisor(engine)

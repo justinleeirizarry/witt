@@ -1,5 +1,5 @@
 """
-truthgate.state — Execution state tracking for agent pipelines.
+witt.state — Execution state tracking for agent pipelines.
 
 Tracks facts about the world as tools execute, so the supervisor
 always validates against current reality.

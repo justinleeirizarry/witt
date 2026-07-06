@@ -1,5 +1,5 @@
 """
-truthgate.engine — Deterministic propositional logic validation.
+witt.engine — Deterministic propositional logic validation.
 
 The core truth table engine. Exhaustive, deterministic, dependency-free.
 

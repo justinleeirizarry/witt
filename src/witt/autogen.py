@@ -1,5 +1,5 @@
 """
-truthgate.autogen — Generate validation rules from tool specifications.
+witt.autogen — Generate validation rules from tool specifications.
 
 The key insight from BFCL testing: tool specs already contain the
 constraints. Required parameters, dependencies, destructive flags —

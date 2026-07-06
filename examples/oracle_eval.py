@@ -1,5 +1,5 @@
 """
-Claim B, definitively: does truthgate catch the errors that actually break
+Claim B, definitively: does witt catch the errors that actually break
 a task — judged by an oracle it has no access to?
 
 The current README benchmark injects errors by falsifying the exact premise
@@ -9,14 +9,14 @@ harness fixes both flaws:
   * Independent oracle. BFCL multi-turn ships executable stateful classes
     (a real file system, trading bot, etc.). We execute each call sequence
     and label it by its actual effect — final state + return values —
-    compared to the ground-truth sequence. truthgate never sees this.
+    compared to the ground-truth sequence. witt never sees this.
 
   * Rule-blind adversary. Mutations (drop an argument, change a value,
     reorder calls, swap a tool) are applied to valid ground-truth
-    sequences by a generator that knows nothing about truthgate's rules.
+    sequences by a generator that knows nothing about witt's rules.
 
   * The false-negative cell. We report the full confusion matrix, so the
-    errors truthgate MISSES are counted — per mutation category.
+    errors witt MISSES are counted — per mutation category.
 
 The engine is built purely mechanically from the tool specs
 (generate_rules) and frozen. No hand-tuning against the mutations.
@@ -35,7 +35,7 @@ import os
 import random
 import sys
 
-from truthgate import Supervisor, generate_rules, infer_dependencies_from_traces
+from witt import Supervisor, generate_rules, infer_dependencies_from_traces
 
 CLASS_MODULES = {
     "GorillaFileSystem": "gorilla_file_system",
@@ -126,7 +126,7 @@ def execute(seq, involved, cfg, registry, order):
 
 
 def gate_sequence(seq, engine, order):
-    """Return the index truthgate blocks at, or None if it allows all."""
+    """Return the index witt blocks at, or None if it allows all."""
     gate = Supervisor(engine)
     for idx, call in enumerate(seq):
         try:

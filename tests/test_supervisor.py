@@ -1,7 +1,7 @@
 """Supervisor scenario tests + autogen tests."""
 
 import pytest
-from truthgate import (
+from witt import (
     Supervisor, StateTracker, TruthTableEngine,
     generate_rules, infer_dependencies_from_traces, ContradictoryRuleset,
 )
@@ -64,7 +64,7 @@ class TestAutogen:
         assert v2.allowed
 
     def test_destructive_detection_matches_whole_tokens_only(self):
-        from truthgate.autogen import is_destructive
+        from witt.autogen import is_destructive
         # true positives — verb is a whole token in the name
         assert is_destructive("delete_record")
         assert is_destructive("send_email")

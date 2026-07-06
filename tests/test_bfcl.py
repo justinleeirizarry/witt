@@ -12,8 +12,8 @@ import os
 import re
 
 import pytest
-from truthgate import TruthTableEngine, generate_rules
-from truthgate.autogen import param_prop
+from witt import TruthTableEngine, generate_rules
+from witt.autogen import param_prop
 
 BFCL_DATA = os.environ.get(
     "BFCL_DATA_DIR",

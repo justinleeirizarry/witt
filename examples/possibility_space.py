@@ -15,7 +15,7 @@ Declaring the space restricts reasoning to genuine possibilities.
 Run: python examples/possibility_space.py
 """
 
-from truthgate import TruthTableEngine
+from witt import TruthTableEngine
 
 e = TruthTableEngine()
 

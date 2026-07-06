@@ -3,13 +3,13 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "truthgate"
+name = "witt"
 version = "0.1.0"
 description = "Deterministic logic validation for AI agent tool calls"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "truthgate contributors" }]
+authors = [{ name = "witt contributors" }]
 keywords = ["ai", "agents", "validation", "tool-use", "llm", "logic"]
 classifiers = [
     "Development Status :: 3 - Alpha",

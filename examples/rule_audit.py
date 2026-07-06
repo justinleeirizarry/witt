@@ -12,7 +12,7 @@ others (redundant) and rules with identical truth-conditions (the same
 Run: python examples/rule_audit.py
 """
 
-from truthgate import TruthTableEngine
+from witt import TruthTableEngine
 
 e = TruthTableEngine()
 

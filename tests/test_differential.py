@@ -1,8 +1,8 @@
-"""Differential test: truthgate vs. an independent SAT solver (z3).
+"""Differential test: witt vs. an independent SAT solver (z3).
 
-truthgate reasons by exhaustive truth-table enumeration. z3 reasons by
+witt reasons by exhaustive truth-table enumeration. z3 reasons by
 DPLL/SMT search. They share no code. If they agree on thousands of random
-formulas, truthgate's engine is correct in the only sense that matters —
+formulas, witt's engine is correct in the only sense that matters —
 not "passes the tests we wrote" but "computes the same function classical
 logic does."
 
@@ -17,7 +17,7 @@ import random
 
 import pytest
 
-from truthgate import TruthTableEngine
+from witt import TruthTableEngine
 
 z3 = pytest.importorskip("z3")
 
@@ -26,7 +26,7 @@ SEEDS = list(range(300))
 
 
 def to_z3(expr, vs):
-    """Translate a truthgate expression into a z3 boolean expression."""
+    """Translate a witt expression into a z3 boolean expression."""
     if isinstance(expr, str):
         return vs[expr]
     op, args = expr["op"], expr["args"]
@@ -125,7 +125,7 @@ class TestVacuityMatchesZ3:
 
 
 class TestPossibilitySpaceMatchesZ3:
-    """The subtle one: truthgate's space filtering must agree with z3 when
+    """The subtle one: witt's space filtering must agree with z3 when
     the space axioms are added to the solver as hard constraints."""
 
     @pytest.mark.parametrize("seed", SEEDS)

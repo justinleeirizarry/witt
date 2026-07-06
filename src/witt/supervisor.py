@@ -1,5 +1,5 @@
 """
-truthgate.supervisor — The gate between agent decision and execution.
+witt.supervisor — The gate between agent decision and execution.
 
 One call before every tool execution:
 
@@ -44,7 +44,7 @@ class Supervisor:
     """Validates proposed tool calls against logical rules + current state.
 
     Usage:
-        from truthgate import Supervisor, generate_rules
+        from witt import Supervisor, generate_rules
 
         engine = generate_rules(tools, dependencies={"summarize": ["search"]})
         gate = Supervisor(engine)

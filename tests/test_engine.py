@@ -1,7 +1,7 @@
 """Engine correctness tests. All must pass 100% — the engine is deterministic."""
 
 import pytest
-from truthgate import TruthTableEngine
+from witt import TruthTableEngine
 
 
 @pytest.fixture

@@ -1,10 +1,10 @@
 """
-truthgate quickstart — validate agent tool calls in ~10 lines.
+witt quickstart — validate agent tool calls in ~10 lines.
 
 Run: python examples/quickstart.py
 """
 
-from truthgate import Supervisor, generate_rules
+from witt import Supervisor, generate_rules
 
 # 1. Your tools, in the same format you already give your agent
 #    (OpenAI / Anthropic / BFCL function-calling schema)

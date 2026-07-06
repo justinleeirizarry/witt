@@ -9,7 +9,7 @@ you'd wrap around any real model.
 Run: python examples/agent_loop.py
 """
 
-from truthgate import Supervisor, generate_rules
+from witt import Supervisor, generate_rules
 
 TOOLS = [
     {"name": "get_location", "description": "Get the user's location",

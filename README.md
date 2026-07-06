@@ -1,4 +1,4 @@
-# truthgate
+# witt
 
 Deterministic logic validation for AI agent tool calls.
 
@@ -14,7 +14,7 @@ The inputs are facts from the execution log (was auth called? did the user confi
 
 Two claims, tested separately — because they're different claims.
 
-**1. The engine is logically correct.** 1,500 randomized formulas are cross-checked against [z3](https://github.com/Z3Prover/z3), an independent SMT solver that shares no code with truthgate: evaluation, entailment (including every classical fallacy), conflict detection, vacuity, and possibility-space filtering all agree, on every case. This is soundness in the only sense that matters — it computes the same function classical logic does, not "passes the tests we wrote." (`tests/test_differential.py`)
+**1. The engine is logically correct.** 1,500 randomized formulas are cross-checked against [z3](https://github.com/Z3Prover/z3), an independent SMT solver that shares no code with witt: evaluation, entailment (including every classical fallacy), conflict detection, vacuity, and possibility-space filtering all agree, on every case. This is soundness in the only sense that matters — it computes the same function classical logic does, not "passes the tests we wrote." (`tests/test_differential.py`)
 
 **2. The rules catch structural tool-call errors at zero false positives — judged by an independent oracle.** BFCL multi-turn ships executable stateful classes (a real file system, trading bot, …). The harness executes each call sequence, labels a mutation "broke the task" by its *actual effect* (final state + return values vs. ground truth), and only then gates it with a purely spec-derived, frozen engine. Mutations are generated blind to the rules, and the false-negative cell — what the tool *misses* — is counted. (`examples/oracle_eval.py`, `tests/test_oracle.py`)
 
@@ -47,7 +47,7 @@ pip install -e ".[dev]" && pytest
 ## Quickstart
 
 ```python
-from truthgate import Supervisor, generate_rules
+from witt import Supervisor, generate_rules
 
 # Your tools — the same JSON schema you already give your agent
 tools = [
@@ -86,7 +86,7 @@ It also declares the one internal relation implied by the `StateTracker` contrac
 You can also write rules directly:
 
 ```python
-from truthgate import TruthTableEngine
+from witt import TruthTableEngine
 
 e = TruthTableEngine()
 e.rule("no read after delete",
