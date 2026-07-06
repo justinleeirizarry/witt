@@ -186,6 +186,16 @@ What it is **not**: it reasons about *structure and logic*, not *values*. It can
 
 `validate_closed` (closed-world: absent fact = false) is what agent validation uses. `validate` (open-world: absent fact = free variable) is for pure logic checking; e.g. `check_entailment` correctly flags affirming-the-consequent and other fallacies.
 
+## Why "witt"?
+
+Short for Wittgenstein. The design borrows the central move of his *Tractatus*: a proposition's content is the set of possibilities it excludes. Three features are that one idea applied three times.
+
+- **The possibility space** is his *logical space* (2.11): you declare which combinations of facts can exist at all, so the engine never reasons over impossible worlds. His own colour-exclusion problem (6.3751) is exactly the bug it fixes.
+- **Rule auditing** is his two degenerate truth-functions (4.46): a tautology "says nothing" (a vacuous rule), a contradiction can't be satisfied (a conflicting ruleset).
+- **Rule identity** is *sense = truth-conditions* (4.431): two rules are the same when they permit the same worlds.
+
+You don't need any of this to use the tool. It's just why the tool is shaped the way it is.
+
 ## Limits
 
 - **Propositional logic only.** No quantifiers ("all suppliers must…"). Ground them into per-instance propositions.
