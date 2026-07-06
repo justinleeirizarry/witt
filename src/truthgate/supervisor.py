@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from .engine import TruthTableEngine
 from .state import StateTracker
-from .autogen import action_prop, param_prop
+from .autogen import action_prop, param_prop, confirm_prop
 
 
 class ContradictoryRuleset(ValueError):
@@ -59,6 +59,7 @@ class Supervisor:
         self.engine = engine
         self.state = state or StateTracker()
         self.log: list[dict] = []
+        self._last_tool: str | None = None  # most recent tool passed to check()
         if strict:
             self._check_ruleset_health()
 
@@ -99,8 +100,14 @@ class Supervisor:
             tool_name: the tool the agent wants to call
             params: the parameters it's passing (presence of a required
                 param sets its Has_ prop automatically)
+
+        Note: a param is treated as supplied when its value is not None. A
+        None value counts as "not supplied" (a required param passed as
+        None will still be flagged); other falsy values ("", 0, False) do
+        count as supplied.
         """
         t0 = time.perf_counter()
+        self._last_tool = tool_name
 
         props = self.state.snapshot()
         props[action_prop(tool_name)] = True
@@ -140,22 +147,37 @@ class Supervisor:
 
     # ── State updates ────────────────────────────────────────────
     def record_success(self, tool_name: str, extra_state: dict | None = None):
-        """Call after a tool executes successfully."""
+        """Call after a tool executes successfully. Also *consumes* any
+        confirmation for this tool, so the next destructive call must be
+        confirmed afresh rather than riding a stale approval."""
         self.state.on_tool_success(tool_name, extra_state)
+        self.state.set(confirm_prop(tool_name), False)
         return self
 
     def record_failure(self, tool_name: str):
         self.state.on_tool_failure(tool_name)
         return self
 
-    def confirm(self):
-        """Record that the user confirmed the pending action."""
-        self.state.set("UserConfirmed", True)
+    def _confirm_target(self, tool_name: str | None) -> str:
+        target = tool_name or self._last_tool
+        if target is None:
+            raise ValueError(
+                "confirm() needs a tool name — nothing has been checked yet")
+        return target
+
+    def confirm(self, tool_name: str | None = None):
+        """Record that the user confirmed a specific destructive action.
+
+        Confirmation is per-tool: confirming `delete_record` does not
+        authorize `send_email`. With no argument, confirms the most
+        recently checked tool."""
+        self.state.set(confirm_prop(self._confirm_target(tool_name)), True)
         return self
 
-    def unconfirm(self):
-        """Clear confirmation (call after each confirmed action executes)."""
-        self.state.set("UserConfirmed", False)
+    def unconfirm(self, tool_name: str | None = None):
+        """Clear a tool's confirmation. record_success already consumes it
+        after a successful call; use this to revoke a pending one."""
+        self.state.set(confirm_prop(self._confirm_target(tool_name)), False)
         return self
 
     # ── Introspection ────────────────────────────────────────────

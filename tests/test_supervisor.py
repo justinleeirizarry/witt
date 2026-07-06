@@ -295,9 +295,40 @@ class TestSupervisor:
     def test_confirm_unconfirm_cycle(self):
         engine = generate_rules([DELETE_TOOL])
         gate = Supervisor(engine)
-        gate.confirm()
+        gate.confirm("delete_record")
         assert gate.check("delete_record", params={"record_id": "1"}).allowed
-        gate.unconfirm()
+        gate.unconfirm("delete_record")
+        assert not gate.check("delete_record", params={"record_id": "1"}).allowed
+
+    def test_confirm_no_arg_uses_last_checked_tool(self):
+        engine = generate_rules([DELETE_TOOL])
+        gate = Supervisor(engine)
+        assert not gate.check("delete_record", params={"record_id": "1"}).allowed
+        gate.confirm()   # no arg → confirms the tool just checked
+        assert gate.check("delete_record", params={"record_id": "1"}).allowed
+
+    def test_confirmation_is_scoped_per_tool(self):
+        # The #4 fix: confirming one destructive action must not authorize
+        # a different one.
+        send_tool = {"name": "send_email", "description": "Send an email",
+                     "parameters": {"type": "object",
+                                    "properties": {"to": {"type": "string"}},
+                                    "required": ["to"]}}
+        engine = generate_rules([DELETE_TOOL, send_tool])
+        gate = Supervisor(engine)
+        gate.confirm("delete_record")
+        assert gate.check("delete_record", params={"record_id": "1"}).allowed
+        assert not gate.check("send_email", params={"to": "a@b.com"}).allowed
+        gate.confirm("send_email")
+        assert gate.check("send_email", params={"to": "a@b.com"}).allowed
+
+    def test_confirmation_consumed_on_success(self):
+        engine = generate_rules([DELETE_TOOL])
+        gate = Supervisor(engine)
+        gate.confirm("delete_record")
+        assert gate.check("delete_record", params={"record_id": "1"}).allowed
+        gate.record_success("delete_record")
+        # stale approval is consumed → the next destructive call re-confirms
         assert not gate.check("delete_record", params={"record_id": "1"}).allowed
 
     def test_state_tracker_history(self):

@@ -7,6 +7,8 @@ always validates against current reality.
 
 from __future__ import annotations
 
+from .autogen import done_prop, result_prop
+
 
 class StateTracker:
     """Tracks agent execution state as propositions.
@@ -18,7 +20,7 @@ class StateTracker:
     Usage:
         state = StateTracker()
         state.set("Authenticated", True)
-        state.on_tool_success("search_web")   # sets Done_search_web + Has_search_web_result
+        state.on_tool_success("search_web")   # sets Done_search_web + Result_search_web
         snapshot = state.snapshot()
     """
 
@@ -40,16 +42,19 @@ class StateTracker:
     def on_tool_success(self, tool_name: str, extra: dict | None = None):
         """Record a successful tool execution.
 
-        Sets Done_{tool} and Has_{tool}_result, plus any extra props
+        Sets Done_{tool} and Result_{tool} (kept in lockstep with the
+        completion coupling in generate_rules), plus any extra props
         (e.g. a location tool succeeding should set HasUserLocation).
         """
-        self.set(f"Done_{tool_name}", True)
-        self.set(f"Has_{tool_name}_result", True)
+        self.set(done_prop(tool_name), True)
+        self.set(result_prop(tool_name), True)
         for k, v in (extra or {}).items():
             self.set(k, v)
         return self
 
     def on_tool_failure(self, tool_name: str):
+        # NOTE: generate_rules emits no rule referencing Failed_ props, so
+        # this state is inert unless you author your own failure-aware rules.
         self.set(f"Failed_{tool_name}", True)
         return self
 

@@ -13,6 +13,7 @@ import re
 
 import pytest
 from truthgate import TruthTableEngine, generate_rules
+from truthgate.autogen import param_prop
 
 BFCL_DATA = os.environ.get(
     "BFCL_DATA_DIR",
@@ -84,7 +85,7 @@ class TestBFCL:
         for name in all_calls:
             tool = tools.get(name, {})
             for param in (tool.get("parameters", {}) or {}).get("required", []) or []:
-                state[f"Has_{name}_{param}"] = True
+                state[param_prop(name, param)] = True
         return state
 
     def _calls_for(self, case):
@@ -138,7 +139,7 @@ class TestBFCL:
                 if not req:
                     continue
                 state = self._base_state(calls)
-                state[f"Has_{name}_{req[0]}"] = False
+                state[param_prop(name, req[0])] = False
                 props = {**state, f"Call_{name}": True}
                 r = engine.validate_closed(props)
                 if r["valid"]:

@@ -57,11 +57,26 @@ def action_prop(tool_name: str) -> str:
 
 
 def param_prop(tool_name: str, param: str) -> str:
-    return f"Has_{tool_name}_{param}"
+    # '::' separates tool from param so names can't alias — Has_a::b_c and
+    # Has_a_b::c are distinct, where the old Has_a_b_c form collided. '::'
+    # can't occur in a normal tool/param identifier.
+    return f"Has_{tool_name}::{param}"
 
 
 def done_prop(tool_name: str) -> str:
     return f"Done_{tool_name}"
+
+
+def result_prop(tool_name: str) -> str:
+    # Distinct 'Result_' prefix so a param literally named 'result'
+    # (Has_{tool}::result) can't collide with the completion prop.
+    return f"Result_{tool_name}"
+
+
+def confirm_prop(tool_name: str) -> str:
+    # Per-tool confirmation — confirming one destructive action does not
+    # authorize a different one.
+    return f"Confirmed_{tool_name}"
 
 
 def generate_rules(
@@ -77,7 +92,8 @@ def generate_rules(
     Args:
         tools: list of tool specs (OpenAI/Anthropic/BFCL function format)
         dependencies: {"tool_b": ["tool_a"]} — tool_b requires tool_a done first
-        require_confirmation: tool names that need UserConfirmed=True
+        require_confirmation: tool names that require confirmation before
+            running (each gets a per-tool Confirmed_X gate)
         auto_detect_destructive: add confirmation rules for tools whose
             name contains a destructive verb as a whole token (see
             is_destructive)
@@ -89,14 +105,13 @@ def generate_rules(
         engine: extend an existing engine instead of creating a new one
 
     Rule types generated:
-        1. Required parameter rules: Call_X → Has_X_param
+        1. Required parameter rules: Call_X → Has_X::param
         2. Dependency rules:         Call_X → Done_Y
-        3. Confirmation rules:       Call_X → UserConfirmed
+        3. Confirmation rules:       Call_X → Confirmed_X  (per-tool)
     Space constraints generated (model_state_space):
-        4. Completion coupling:      Done_X ↔ Has_X_result
+        4. Completion coupling:      Done_X ↔ Result_X
     """
     e = engine or TruthTableEngine()
-    e.prop("UserConfirmed", "User confirmed the pending action", "state")
 
     confirm_set = set(require_confirmation or [])
 
@@ -111,9 +126,9 @@ def generate_rules(
         # A completed tool always has a result and vice versa — the
         # StateTracker sets both on success (colour-exclusion, grounded).
         if model_state_space:
-            result_prop = f"Has_{name}_result"
-            e.prop(result_prop, f"{name} produced a result", "state")
-            e.coupled(done_prop(name), result_prop,
+            rp = result_prop(name)
+            e.prop(rp, f"{name} produced a result", "state")
+            e.coupled(done_prop(name), rp,
                       name=f"{name}: completed iff has result")
 
         # 1. Required parameters
@@ -130,11 +145,14 @@ def generate_rules(
         if auto_detect_destructive and is_destructive(name):
             confirm_set.add(name)
 
-    # 3. Confirmation rules
+    # 3. Confirmation rules — per-tool, so confirming one destructive
+    #    action never authorizes another.
     for name in confirm_set:
+        cp = confirm_prop(name)
+        e.prop(cp, f"user confirmed {name}", "state")
         e.rule(
             f"{name} requires user confirmation",
-            e.IMPLIES(action_prop(name), "UserConfirmed"),
+            e.IMPLIES(action_prop(name), cp),
         )
 
     # 4. Explicit dependencies
@@ -151,12 +169,20 @@ def generate_rules(
 def infer_dependencies_from_traces(traces: list[list[str]], min_support: float = 0.95) -> dict:
     """Mine ordering dependencies from execution traces.
 
-    If tool B appears in traces and is *always* (>= min_support of the
-    time) preceded by tool A, propose B depends on A.
+    If tool B is preceded by tool A in at least `min_support` of B's
+    occurrences, propose B depends on A.
+
+    CAUTION — this is correlation, not causation. "A usually precedes B"
+    does not mean B *requires* A; habitual sequencing and common causes
+    produce spurious dependencies (e.g. `cp requires cd`). Dependencies
+    mined this way can introduce false positives when used as hard gates
+    (see examples/oracle_eval.py). Review before trusting them, and note
+    the default threshold is 0.95, not 1.0 — a proposed dependency may be
+    violated by up to 1 in 20 traces.
 
     Args:
         traces: list of tool-name sequences, e.g. [["auth","query"],["auth","query","report"]]
-        min_support: fraction of B-occurrences where A precedes it
+        min_support: fraction of B-occurrences where A precedes it (default 0.95)
 
     Returns:
         {"tool_b": ["tool_a", ...]}

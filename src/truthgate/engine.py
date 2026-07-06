@@ -465,7 +465,10 @@ class TruthTableEngine:
 
         Returns:
             vacuous:     rules true in every possible world (say nothing)
-            redundant:   [{rule, entailed_by}] — implied by the other rules
+            redundant:   [{rule, entailed_by}] — implied by the other rules.
+                         `entailed_by` names single rules that alone imply
+                         it; it is empty when only the *conjunction* of the
+                         others does (the rule is still genuinely redundant).
             equivalent:  groups of rules with identical sense (4.431)
             conflicts:   minimal jointly-unsatisfiable rule sets
             impossible_space: constraint sets that admit no world at all

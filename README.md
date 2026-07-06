@@ -77,11 +77,11 @@ gate.check("summarize").allowed   # True
 
 Three rule types are generated automatically:
 
-1. **Required parameters** — `Call_X → Has_X_param` from the JSON schema's `required` list
-2. **Confirmations** — tools whose name/description contains a destructive verb (`delete`, `send`, `pay`, `book`, …) require `UserConfirmed`
-3. **Dependencies** — from the `dependencies` argument, or mined from execution traces with `infer_dependencies_from_traces()`
+1. **Required parameters** — `Call_X → Has_X::param` from the JSON schema's `required` list
+2. **Confirmations** — tools whose *name* contains a destructive verb as a whole token (`delete`, `send`, `pay`, `book`, …) require **per-tool** confirmation (`Call_X → Confirmed_X`). Confirming one destructive action never authorizes another, and `record_success` consumes the confirmation so the next call must re-confirm. Confirm via `gate.confirm("delete_record")` (or `gate.confirm()` for the tool just checked).
+3. **Dependencies** — from the `dependencies` argument, or mined from execution traces with `infer_dependencies_from_traces()` (correlation-based — review before using as hard gates)
 
-It also declares the one internal relation implied by the `StateTracker` contract: `Done_X` and `Has_X_result` are always set together, so they're `coupled` (`Done_X ↔ Has_X_result`) — a state with one but not the other is flagged as *impossible*, not merely invalid. Pass `model_state_space=False` to skip this if you set state by hand. It's free at runtime: with everything pinned, closed-world validation short-circuits the constraint check, so per-check latency is unchanged.
+It also declares the one internal relation implied by the `StateTracker` contract: `Done_X` and `Result_X` are always set together, so they're `coupled` (`Done_X ↔ Result_X`) — a state with one but not the other is flagged as *impossible*, not merely invalid. Pass `model_state_space=False` to skip this if you set state by hand. It's free at runtime: with everything pinned, closed-world validation short-circuits the constraint check, so per-check latency is unchanged.
 
 You can also write rules directly:
 
