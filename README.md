@@ -8,7 +8,7 @@ It's a **gate, not a model**: deterministic, explainable, and it can only ever s
 
 ## The idea
 
-Wittgenstein's *Tractatus* (1921): a statement's content is the set of possibilities it rules out. witt applies that one idea three times, to check an action against the facts, to audit whether your own rulebook is even coherent, and to notice when two rules secretly say the same thing. A hundred-year-old move in logic, turned into a safety gate. ([Why "witt"?](#why-witt) has the details.)
+Wittgenstein's *Tractatus* (1921): a statement's content is the set of possibilities it rules out. witt applies that one idea three times, to check an action against the facts, to audit whether your own rulebook is even coherent, and to notice when two rules secretly say the same thing. A hundred-year-old move in logic, turned into a safety gate.
 
 ## Why
 
@@ -232,13 +232,13 @@ The same shape covers workflow/state-machine guards ("no refund after archive"),
 
 ## Why "witt"?
 
-Short for Wittgenstein. The design borrows the central move of his *Tractatus*: a proposition's content is the set of possibilities it excludes. Three features are that one idea applied three times.
+Short for Wittgenstein. The three features above are one move from his *Tractatus* — a proposition's content is the set of possibilities it excludes — applied three times:
 
-- **The possibility space** is his *logical space* (2.11): you declare which combinations of facts can exist at all, so the engine never reasons over impossible worlds. His own colour-exclusion problem (6.3751) is exactly the bug it fixes.
+- **The possibility space** is his *logical space* (2.11); the colour-exclusion problem (6.3751) is exactly the bug it fixes.
 - **Rule auditing** is his two degenerate truth-functions (4.46): a tautology "says nothing" (a vacuous rule), a contradiction can't be satisfied (a conflicting ruleset).
 - **Rule identity** is *sense = truth-conditions* (4.431): two rules are the same when they permit the same worlds.
 
-You don't need any of this to use the tool. It's just why the tool is shaped the way it is.
+You don't need any of this to use the tool; it's just why it's shaped the way it is.
 
 ## Running the benchmarks
 
