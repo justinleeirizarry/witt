@@ -4,6 +4,8 @@ Deterministic logic validation for AI agent tool calls.
 
 A truth table engine that sits between an agent's decision and execution. It catches invalid tool calls — missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering — before they run. No model, no API, no network. Microseconds per check.
 
+It's a **gate, not a model**: deterministic, explainable, and it can only ever say *no* for a reason you wrote down — the opposite of an LLM judging another LLM. Under the packaging, the core is a general propositional-logic engine (cross-checked against z3), so it isn't limited to agents — see [Beyond tool calling](#beyond-tool-calling).
+
 ## Why
 
 Agents pick tools wrong. They query databases before authenticating, send emails before composing them, act on ambiguous input, and read records they just deleted. These aren't hallucinations — they're logic errors, and logic errors are exactly what a truth table catches deterministically.
@@ -143,6 +145,32 @@ else:
 ```
 
 See `examples/agent_loop.py` for a runnable version.
+
+## Beyond tool calling
+
+Agent tool-calling is the launch use case, not the limit. The core is a general propositional-logic engine, so it fits **anywhere you can express state as boolean facts and want a fast, deterministic, explainable "is this allowed / consistent?" check** — with the rules auditable for contradictions before you ship them.
+
+Feature-flag / config validation, for instance — no agent in sight:
+
+```python
+from witt import TruthTableEngine
+
+e = TruthTableEngine()
+e.rule("dark mode needs the new UI", e.IMPLIES("dark_mode", "new_ui"))
+e.rule("SSO needs an org plan",       e.IMPLIES("sso", "org_plan"))
+e.incompatible("cache", "debug")      # can't ship both at once
+
+# Is a proposed configuration valid?
+e.validate_closed({"dark_mode": True, "new_ui": False})["violations"]
+# → ["dark mode needs the new UI"]
+
+# Audit the policy *itself* for contradictions before rollout:
+e.audit()["conflicts"]                # → []  (or the minimal conflicting rule set)
+```
+
+The same shape covers **workflow / state-machine guards** ("no refund after archive"), **access-control policy** (`delete → admin ∧ confirmed`), **eligibility / business rules** (`loan → income_verified ∧ ¬flagged`), **CI/CD gates** (`prod_deploy → tests_passed ∧ approved ∧ ¬freeze`), and **cross-field form validation** (`country=US → state_required`). `check_entailment`, `find_conflicts`, and `truth_table` also make it a usable small logic utility in its own right.
+
+What it is **not**: it reasons about *structure and logic*, not *values*. It can enforce "an amount is present and confirmed"; it cannot know that `amount=1000` should have been `100`. Everything must ground to booleans (`amount > 100` is a fact something else computes and feeds in), it's propositional only (no quantifiers), and it's exponential in genuinely-free variables (a non-issue in closed-world checking, where facts are pinned).
 
 ## API surface
 
