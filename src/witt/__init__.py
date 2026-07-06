@@ -27,6 +27,7 @@ from .supervisor import Supervisor, Verdict, ContradictoryRuleset
 from .autogen import (
     generate_rules,
     infer_dependencies_from_traces,
+    normalize_bindings,
     action_prop,
     param_prop,
     done_prop,
@@ -42,6 +43,7 @@ __all__ = [
     "ContradictoryRuleset",
     "generate_rules",
     "infer_dependencies_from_traces",
+    "normalize_bindings",
     "action_prop",
     "param_prop",
     "done_prop",

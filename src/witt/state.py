@@ -27,6 +27,9 @@ class StateTracker:
     def __init__(self, initial: dict | None = None):
         self._state: dict[str, bool] = dict(initial or {})
         self._history: list[tuple[str, bool]] = []
+        # Argument values each tool has completed with, for argument-bound
+        # dependency checks. tool -> list of the param dicts it succeeded on.
+        self._call_args: dict[str, list[dict]] = {}
 
     def set(self, prop: str, value: bool = True):
         self._state[prop] = bool(value)
@@ -39,18 +42,46 @@ class StateTracker:
     def get(self, prop: str) -> bool:
         return self._state.get(prop, False)
 
-    def on_tool_success(self, tool_name: str, extra: dict | None = None):
+    def on_tool_success(self, tool_name: str, extra: dict | None = None,
+                        params: dict | None = None):
         """Record a successful tool execution.
 
         Sets Done_{tool} and Result_{tool} (kept in lockstep with the
         completion coupling in generate_rules), plus any extra props
         (e.g. a location tool succeeding should set HasUserLocation).
+
+        `params` records the argument values the call ran with, so a later
+        argument-bound dependency can confirm object identity across steps.
         """
         self.set(done_prop(tool_name), True)
         self.set(result_prop(tool_name), True)
         for k, v in (extra or {}).items():
             self.set(k, v)
+        if params is not None:
+            self._call_args.setdefault(tool_name, []).append(dict(params))
         return self
+
+    def completed_with(self, tool_name: str, param: str, value) -> bool:
+        """Did `tool_name` complete at least once with `param` == `value`?
+
+        Values are compared by equality, with a string-normalized fallback so
+        an id supplied as 42 matches one recorded as "42"."""
+        for rec in self._call_args.get(tool_name, []):
+            if param not in rec:
+                continue
+            got = rec[param]
+            if got == value or str(got) == str(value):
+                return True
+        return False
+
+    def completed_values(self, tool_name: str, param: str) -> list:
+        """The distinct values `tool_name` has completed with for `param`
+        (for building a helpful 'it completed with: ...' message)."""
+        seen: list = []
+        for rec in self._call_args.get(tool_name, []):
+            if param in rec and rec[param] not in seen:
+                seen.append(rec[param])
+        return seen
 
     def on_tool_failure(self, tool_name: str):
         # NOTE: generate_rules emits no rule referencing Failed_ props, so
@@ -68,4 +99,5 @@ class StateTracker:
     def reset(self):
         self._state.clear()
         self._history.clear()
+        self._call_args.clear()
         return self

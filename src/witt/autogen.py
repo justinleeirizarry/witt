@@ -79,12 +79,50 @@ def confirm_prop(tool_name: str) -> str:
     return f"Confirmed_{tool_name}"
 
 
+def normalize_bindings(bindings: dict | None) -> dict:
+    """Normalize the `bindings` argument into a canonical form.
+
+    A binding says: calling `tool` with argument `param` requires that a
+    prior `dep` call *completed with the matching value*. This is object
+    identity, not logical structure — so it is enforced by the Supervisor
+    layer, not the boolean engine (which reasons about structure only).
+
+    `param` names the argument on the *calling* tool; `dep_param` names the
+    argument the dependency must have matched (defaults to `param` when the
+    two tools use the same name for the shared value).
+
+    Accepted input forms per entry (values of the top-level dict are lists):
+        {"tool": "tool_a", "param": "id"}            # dep_param defaults to param
+        {"tool": "tool_a", "param": "id", "dep_param": "key"}
+        ("tool_a", "id")                             # tuple shorthand
+        ("tool_a", "id", "key")                      # (dep, param, dep_param)
+
+    Returns: {caller_tool: [{"dep", "param", "dep_param"}, ...]}
+    """
+    out: dict[str, list[dict]] = {}
+    for tool, entries in (bindings or {}).items():
+        norm: list[dict] = []
+        for e in entries:
+            if isinstance(e, dict):
+                dep = e["tool"]
+                param = e["param"]
+                dep_param = e.get("dep_param", param)
+            else:  # tuple/list form
+                dep, param = e[0], e[1]
+                dep_param = e[2] if len(e) > 2 else param
+            norm.append({"dep": dep, "param": param, "dep_param": dep_param})
+        if norm:
+            out[tool] = norm
+    return out
+
+
 def generate_rules(
     tools: list[dict],
     dependencies: dict[str, list[str]] | None = None,
     require_confirmation: list[str] | None = None,
     auto_detect_destructive: bool = True,
     model_state_space: bool = True,
+    bindings: dict | None = None,
     engine: TruthTableEngine | None = None,
 ) -> TruthTableEngine:
     """Build a TruthTableEngine from tool specifications.
@@ -92,6 +130,14 @@ def generate_rules(
     Args:
         tools: list of tool specs (OpenAI/Anthropic/BFCL function format)
         dependencies: {"tool_b": ["tool_a"]} — tool_b requires tool_a done first
+        bindings: argument-bound dependencies — {"tool_b": [{"tool":
+            "tool_a", "param": "id"}]} means tool_b called with id=V requires
+            a tool_a that *completed with id=V*, not merely that some tool_a
+            ran. This enforces object identity across steps, which the boolean
+            engine cannot; it is stored on the engine and enforced by the
+            Supervisor. A bound dependency also implies ordering (the dep must
+            have completed), so it subsumes the plain `dependencies` form.
+            See normalize_bindings for accepted entry shapes.
         require_confirmation: tool names that require confirmation before
             running (each gets a per-tool Confirmed_X gate)
         auto_detect_destructive: add confirmation rules for tools whose
@@ -162,6 +208,15 @@ def generate_rules(
                 f"{tool_name} requires {dep} first",
                 e.IMPLIES(action_prop(tool_name), done_prop(dep)),
             )
+
+    # 5. Argument-bound dependencies (object identity across steps).
+    #    Not expressible in the boolean engine — the required value is only
+    #    known at call time — so they ride along on the engine as metadata
+    #    and are enforced by the Supervisor. Stored merged so repeated
+    #    generate_rules(engine=e, ...) calls accumulate rather than clobber.
+    merged = dict(getattr(e, "bindings", {}) or {})
+    merged.update(normalize_bindings(bindings))
+    e.bindings = merged
 
     return e
 

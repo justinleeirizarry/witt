@@ -48,6 +48,7 @@ def configure(
     tools: list[dict],
     dependencies: dict[str, list[str]] | None = None,
     require_confirmation: list[str] | None = None,
+    bindings: dict | None = None,
     strict: bool = False,
 ) -> dict:
     """Build a witt engine from tool specs and start a fresh gate session.
@@ -59,6 +60,12 @@ def configure(
                                   "properties": {"to": {"type": "string"}},
                                   "required": ["to"]}}]
         dependencies: {"tool_b": ["tool_a"]} — tool_b needs tool_a done first.
+        bindings: argument-bound dependencies — object identity across steps.
+            {"tool_b": [{"tool": "tool_a", "param": "id"}]} means tool_b with
+            id=V requires a tool_a that *completed with id=V*, not merely that
+            some tool_a ran. Enforced by the gate (not the boolean engine). A
+            bound dependency also implies ordering, so you don't also need it
+            in `dependencies`.
         require_confirmation: tool names that require confirmation before use
             (destructive tools are also auto-detected from their names).
         strict: if true, refuse to build a contradictory / vacuous-heavy
@@ -71,6 +78,7 @@ def configure(
             tools,
             dependencies=dependencies,
             require_confirmation=require_confirmation,
+            bindings=bindings,
         )
         gate = Supervisor(engine, strict=strict)
     except ContradictoryRuleset as ex:
@@ -83,6 +91,7 @@ def configure(
         "tools": _STATE["tools"],
         "rules": [r["name"] for r in engine.rules],
         "constraints": [c["name"] for c in engine.constraints],
+        "bindings": engine.bindings,
         "rule_count": len(engine.rules),
     }
 
@@ -103,18 +112,24 @@ def check(tool: str, params: dict | None = None) -> dict:
         "allowed": v.allowed,
         "feedback": v.feedback,
         "violations": v.violations,
+        "binding_violations": v.binding_violations,
         "space_violations": v.space_violations,
         "latency_us": round(v.latency_us, 1),
     }
 
 
 @mcp.tool()
-def record_success(tool: str, extra_state: dict | None = None) -> dict:
+def record_success(tool: str, extra_state: dict | None = None,
+                   params: dict | None = None) -> dict:
     """Record that a tool executed successfully. Sets Done_<tool> and its
     result, and consumes any confirmation for that tool. Optional
-    extra_state sets additional facts (e.g. {"HasUserLocation": true})."""
+    extra_state sets additional facts (e.g. {"HasUserLocation": true}).
+
+    Optional `params` records the argument values the call ran with, so
+    argument-bound dependencies can match on them later. If omitted, the
+    params from this tool's most recent check() are reused."""
     gate = _require_gate()
-    gate.record_success(tool, extra_state or None)
+    gate.record_success(tool, extra_state or None, params)
     return {"ok": True, "state": gate.state.snapshot()}
 
 

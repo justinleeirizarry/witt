@@ -33,6 +33,7 @@ class Verdict:
     allowed: bool
     violations: list[str] = field(default_factory=list)
     space_violations: list[str] = field(default_factory=list)
+    binding_violations: list[str] = field(default_factory=list)
     feedback: str = ""
     latency_us: float = 0.0
 
@@ -58,8 +59,12 @@ class Supervisor:
                  strict: bool = False):
         self.engine = engine
         self.state = state or StateTracker()
+        # Argument-bound dependencies (object identity across steps), enforced
+        # here rather than in the boolean engine. See generate_rules(bindings=).
+        self.bindings: dict = getattr(engine, "bindings", {}) or {}
         self.log: list[dict] = []
         self._last_tool: str | None = None  # most recent tool passed to check()
+        self._last_params: dict = {}        # params per tool from the last check()
         if strict:
             self._check_ruleset_health()
 
@@ -107,32 +112,40 @@ class Supervisor:
         count as supplied.
         """
         t0 = time.perf_counter()
+        params = params or {}
         self._last_tool = tool_name
+        self._last_params[tool_name] = dict(params)
 
         props = self.state.snapshot()
         props[action_prop(tool_name)] = True
 
         # Presence of params satisfies the Has_ props for this call
-        for p, v in (params or {}).items():
+        for p, v in params.items():
             if v is not None:
                 props[param_prop(tool_name, p)] = True
 
         result = self.engine.validate_closed(props)
+        # Argument binding is object identity, not logical structure — it
+        # runs alongside the boolean engine, on the actual argument values.
+        binding_violations = self._binding_violations(tool_name, params)
         latency = (time.perf_counter() - t0) * 1_000_000
 
         space_violations = result.get("space_violations", [])
         msgs = []
         if result["violations"]:
             msgs.append("Blocked: " + "; ".join(result["violations"]))
+        if binding_violations:
+            msgs.append("Argument mismatch: " + "; ".join(binding_violations))
         if space_violations:
             # The state itself is impossible — not a forbidden action, an
             # incoherent world. Distinct signal, distinct fix.
             msgs.append("Incoherent state: " + "; ".join(space_violations))
 
         verdict = Verdict(
-            allowed=result["valid"],
+            allowed=result["valid"] and not binding_violations,
             violations=result["violations"],
             space_violations=space_violations,
+            binding_violations=binding_violations,
             feedback=" | ".join(msgs),
             latency_us=latency,
         )
@@ -145,12 +158,41 @@ class Supervisor:
         })
         return verdict
 
+    def _binding_violations(self, tool_name: str, params: dict) -> list[str]:
+        """Check argument-bound dependencies for the proposed call: each
+        requires that the value passed here matches a value the dependency
+        actually completed with. Returns human-readable violation strings."""
+        out: list[str] = []
+        for b in self.bindings.get(tool_name, []):
+            dep, param, dep_param = b["dep"], b["param"], b["dep_param"]
+            value = params.get(param)
+            if value is None:
+                out.append(
+                    f"{tool_name} needs param '{param}' to bind to {dep}.{dep_param}")
+                continue
+            if not self.state.completed_with(dep, dep_param, value):
+                seen = self.state.completed_values(dep, dep_param)
+                where = (f"{dep} completed with {dep_param}={seen}" if seen
+                         else f"{dep} has not completed")
+                out.append(
+                    f"{tool_name}({param}={value!r}) requires {dep} to have "
+                    f"completed with {dep_param}={value!r} ({where})")
+        return out
+
     # ── State updates ────────────────────────────────────────────
-    def record_success(self, tool_name: str, extra_state: dict | None = None):
+    def record_success(self, tool_name: str, extra_state: dict | None = None,
+                       params: dict | None = None):
         """Call after a tool executes successfully. Also *consumes* any
         confirmation for this tool, so the next destructive call must be
-        confirmed afresh rather than riding a stale approval."""
-        self.state.on_tool_success(tool_name, extra_state)
+        confirmed afresh rather than riding a stale approval.
+
+        `params` records the argument values the call ran with (for
+        argument-bound dependencies). If omitted, the params from this tool's
+        most recent check() are used, so the common check-then-record flow
+        binds automatically."""
+        if params is None:
+            params = self._last_params.get(tool_name)
+        self.state.on_tool_success(tool_name, extra_state, params)
         self.state.set(confirm_prop(tool_name), False)
         return self
 
