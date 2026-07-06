@@ -23,14 +23,33 @@ and BFCL:
 
 from __future__ import annotations
 
+import re
+
 from .engine import TruthTableEngine
 
 # Verbs that indicate a destructive/irreversible operation.
-DESTRUCTIVE_HINTS = (
+DESTRUCTIVE_HINTS = frozenset((
     "delete", "remove", "drop", "destroy", "purge", "erase",
     "send", "post", "publish", "pay", "purchase", "buy", "book",
     "transfer", "cancel", "terminate", "overwrite", "truncate",
-)
+))
+
+# camelCase / snake_case / kebab boundaries → individual tokens.
+_TOKEN_SPLIT = re.compile(r"[^a-zA-Z0-9]+|(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _name_tokens(name: str) -> set:
+    """Split a tool name into lowercase word tokens (handles snake_case,
+    camelCase, kebab-case)."""
+    return {t.lower() for t in _TOKEN_SPLIT.split(name) if t}
+
+
+def is_destructive(name: str, hints=DESTRUCTIVE_HINTS) -> bool:
+    """Whole-token match on the tool NAME only. Avoids the substring false
+    positives of the old approach — 'pay' no longer fires on 'payload' or
+    'payment_status', 'book' not on 'bookmark', 'post' not on 'postal_code'
+    — and ignores the description, so 'does not delete anything' is safe."""
+    return bool(_name_tokens(name) & set(hints))
 
 
 def action_prop(tool_name: str) -> str:
@@ -60,7 +79,8 @@ def generate_rules(
         dependencies: {"tool_b": ["tool_a"]} — tool_b requires tool_a done first
         require_confirmation: tool names that need UserConfirmed=True
         auto_detect_destructive: add confirmation rules for tools whose
-            name/description contains a destructive verb
+            name contains a destructive verb as a whole token (see
+            is_destructive)
         model_state_space: declare the internal relations implied by the
             StateTracker contract — `Done_X` and `Has_X_result` are set
             together, so they are `coupled`. Makes states where only one
@@ -84,7 +104,6 @@ def generate_rules(
         name = tool.get("name")
         if not name:
             continue
-        desc = tool.get("description", "")
 
         e.prop(action_prop(name), f"Proposed: call {name}", "action")
         e.prop(done_prop(name), f"{name} has completed", "state")
@@ -107,11 +126,9 @@ def generate_rules(
                 e.IMPLIES(action_prop(name), pp),
             )
 
-        # 2. Auto-detect destructive tools
-        if auto_detect_destructive:
-            haystack = f"{name} {desc}".lower()
-            if any(hint in haystack for hint in DESTRUCTIVE_HINTS):
-                confirm_set.add(name)
+        # 2. Auto-detect destructive tools (whole-token match on the name)
+        if auto_detect_destructive and is_destructive(name):
+            confirm_set.add(name)
 
     # 3. Confirmation rules
     for name in confirm_set:

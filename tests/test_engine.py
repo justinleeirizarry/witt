@@ -187,6 +187,22 @@ class TestEdgeCases:
             expr = e.NOT(expr)
         assert e._eval(expr, {"A": True}) is True  # even number of NOTs
 
+    def test_truth_table_enumerates_all_rows(self, e):
+        rows = e.truth_table(e.IMPLIES("A", "B"))
+        assert len(rows) == 4  # 2 vars → 2^2
+        assert all(set(r) == {"assignment", "result", "possible"} for r in rows)
+        # IMPLIES(A,B) is false only at A=True, B=False
+        false_rows = [r for r in rows if not r["result"]]
+        assert len(false_rows) == 1
+        assert false_rows[0]["assignment"] == {"A": True, "B": False}
+
+    def test_truth_table_flags_impossible_rows(self, e):
+        e.incompatible("A", "B")
+        rows = e.truth_table(e.OR("A", "B"))
+        ab = next(r for r in rows if r["assignment"] == {"A": True, "B": True})
+        assert ab["possible"] is False   # excluded by the space
+        assert all(r["possible"] for r in rows if r["assignment"] != {"A": True, "B": True})
+
 
 # ── Serialization ────────────────────────────────────────────────
 class TestSerialization:

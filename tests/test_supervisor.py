@@ -63,6 +63,19 @@ class TestAutogen:
         v2 = gate.check("delete_record", params={"record_id": "42"})
         assert v2.allowed
 
+    def test_destructive_detection_matches_whole_tokens_only(self):
+        from truthgate.autogen import is_destructive
+        # true positives — verb is a whole token in the name
+        assert is_destructive("delete_record")
+        assert is_destructive("send_email")
+        assert is_destructive("bookFlight")      # camelCase split
+        assert is_destructive("cancel-order")    # kebab split
+        # false positives the old substring match produced — now avoided
+        assert not is_destructive("get_payment_status")   # 'pay' not a token
+        assert not is_destructive("bookmark_page")        # 'book' not a token
+        assert not is_destructive("get_postal_code")      # 'post' not a token
+        assert not is_destructive("list_buyers")          # 'buy' not a token
+
     def test_explicit_dependency(self):
         engine = generate_rules(
             [SEARCH_TOOL, SUMMARIZE_TOOL],

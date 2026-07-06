@@ -17,7 +17,8 @@ params, unconfirmed destructive actions) before they run.
     else:
         agent.retry(verdict.feedback)
 
-Validated: 435/435 on BFCL multi-turn benchmark data, 0 false positives.
+Validated: 200/200 valid BFCL multi-turn sequences allowed, 0 false
+positives; engine cross-checked against z3 on 1,500 random formulas.
 """
 
 from .engine import TruthTableEngine

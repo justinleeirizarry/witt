@@ -101,3 +101,16 @@ class TestScaleAndLimits:
         e.constrain("A fails", e.NOT("A"))   # no world for A
         e.rule("uses A", e.IMPLIES("A", "C"))
         assert e.audit()["impossible_space"]
+
+    def test_midsize_component_reported_partial(self, e):
+        # 18 vars: past the detailed-redundancy threshold (16) but under
+        # the 22-var enumeration cap. Conflicts + vacuity still run; the
+        # quadratic redundancy pass is skipped and the component is 'partial'.
+        ante = e.ALL(*[f"v{i}" for i in range(9)])
+        cons = e.ANY(*[f"v{i}" for i in range(9, 18)])
+        e.rule("mid", e.IMPLIES(ante, cons))
+        rep = e.audit()
+        assert any("mid" in p["rules"] for p in rep["partial"])
+        assert rep["unauditable"] == []      # under the cap, so not unauditable
+        assert rep["conflicts"] == []        # cheap checks still ran
+        assert rep["vacuous"] == []

@@ -120,10 +120,12 @@ The gate validates tool calls against the rules. `audit()` validates the *rules 
 
 ```python
 report = engine.audit()
-# report["vacuous"]     — rules true in every possible world (dead weight)
-# report["redundant"]   — [{rule, entailed_by}] implied by the other rules
-# report["equivalent"]  — groups of rules with identical sense (4.431)
-# report["conflicts"]   — minimal jointly-unsatisfiable rule sets
+# report["vacuous"]          — rules true in every possible world (dead weight)
+# report["redundant"]        — [{rule, entailed_by}] implied by the other rules
+# report["equivalent"]       — groups of rules with identical sense (4.431)
+# report["conflicts"]        — minimal jointly-unsatisfiable rule sets
+# report["impossible_space"] — constraint sets that admit no world at all
+# report["partial"] / ["unauditable"] — components too large to fully audit
 ```
 
 It reports the **minimal conflict core** (the smallest set of rules that actually contradict), not "all your rules conflict." The trick that makes it usable at scale: rules with no shared variables are logically independent, so `audit` decomposes the ruleset into connected components and checks each one on its own — it audits the 159-rule / 385-proposition BFCL engine (a naive single table would be `2^240`) in a few milliseconds. See `examples/rule_audit.py`.

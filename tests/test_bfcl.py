@@ -3,7 +3,8 @@
 Runs against real Berkeley Function Calling Leaderboard data if present
 (clone github.com/ShishirPatil/gorilla). Skips gracefully otherwise.
 
-Validated result: 435/435 (100%), 0 false positives.
+Validated result: 200/200 valid sequences allowed, 229 injected errors
+caught (coverage-by-construction), 0 false positives.
 """
 
 import json

@@ -4,9 +4,9 @@ truthgate.engine — Deterministic propositional logic validation.
 The core truth table engine. Exhaustive, deterministic, dependency-free.
 
 Validated against:
-  - 32/32 agent workflow scenario steps
-  - 435/435 tests on BFCL multi-turn benchmark data (200 real cases)
-  - 0 false positives across all test suites
+  - 1,500 randomized formulas cross-checked with the z3 SMT solver
+  - 200/200 valid BFCL multi-turn sequences allowed, 0 false positives
+  - an independent BFCL execution oracle (see examples/oracle_eval.py)
 """
 
 from __future__ import annotations
@@ -25,6 +25,11 @@ class TruthTableEngine:
         # result.valid == False
         # result.violations == ["DB needs auth"]
     """
+
+    # Above this many free variables, exhaustive enumeration (2^n rows) is
+    # refused — truth tables are exponential. Closed-world agent validation
+    # never hits it (everything is pinned). Single source of truth for the cap.
+    MAX_VARS = 22
 
     def __init__(self):
         self.propositions: dict[str, dict] = {}
@@ -208,7 +213,7 @@ class TruthTableEngine:
     def _all_assignments(self, variables):
         vlist = sorted(variables)
         n = len(vlist)
-        if n > 22:
+        if n > self.MAX_VARS:
             raise ValueError(
                 f"Expression has {n} free variables (2^{n} rows). "
                 "Truth tables are exponential; pin more variables or split the rule."
@@ -361,13 +366,15 @@ class TruthTableEngine:
     # redundancy and sameness-of-sense (4.431), all as set operations
     # over the possible worlds each rule permits.
 
-    def _components(self, max_vars: int = 22) -> list:
+    def _components(self, max_vars: int | None = None) -> list:
         """Partition rules + constraints into connected components by
         shared variables. Variable-disjoint rules are logically
         independent — they can't conflict with, entail, or subsume one
         another — so each component can be audited on its own. This is
         what keeps auditing tractable: 2^(small component), never 2^(all).
         """
+        if max_vars is None:
+            max_vars = self.MAX_VARS
         parent: dict = {}
 
         def find(x):
@@ -480,7 +487,7 @@ class TruthTableEngine:
         # and independently of the component join. ──
         for r in self.rules:
             vs = self._constraint_closure(self._get_vars(r["expr"]))
-            if len(vs) <= 22 and self.check_entailment([], r["expr"])["valid"]:
+            if len(vs) <= self.MAX_VARS and self.check_entailment([], r["expr"])["valid"]:
                 report["vacuous"].append(r["name"])
         report["vacuous"].sort()
         vac_all = set(report["vacuous"])
