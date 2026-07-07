@@ -2,17 +2,17 @@
 
 Deterministic logic validation for AI agent tool calls.
 
-A truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object) before they run. No model, no API, no network. Microseconds per check.
+Witt is a truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object) before they run.
 
 It **checks facts, not judgment**: every verdict follows from your recorded execution state and your rules (generated from the tool specs you already have), so it's explainable and only ever says _no_ for a reason you can point to. The core is a general propositional-logic engine (cross-checked against z3), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
 
 ## The idea
 
-Wittgenstein's _Tractatus_ (1921): a statement's content is the set of possibilities it rules out. witt puts that one idea to work three ways: it **checks each action** (does this tool call land in a world your rules forbid, given what's already happened?), **audits the rulebook itself** (a rule that forbids nothing is dead weight; rules that forbid everything would freeze the agent, it flags both), and **spots duplicate rules** (two rules that exclude the same possibilities are secretly one).
+In Wittgenstein's Tractatus (1921), he argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make. The gate checks the rules themselves, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
 
 ## Why
 
-Agents pick tools wrong: they query databases before authenticating, send emails before composing them, read records they just deleted. These aren't hallucinations, they're logic errors, and logic errors are exactly what a truth table catches deterministically. And because the check reads the execution log directly rather than classifying intent, there's no feature-extraction step to misfire: the false-positive rate is zero by construction.
+Agents pick the wrong tools: they query databases before authenticating, send emails before composing them, read records they just deleted. These aren't hallucinations, they're logic errors, and logic errors are exactly what a truth table catches deterministically. And because the check reads the execution log directly rather than classifying intent, there's no feature-extraction step to misfire: the false-positive rate is zero by construction.
 
 ## Install
 
