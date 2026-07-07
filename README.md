@@ -4,11 +4,11 @@ Deterministic logic validation for AI agent tool calls.
 
 Witt is a truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object) before they run.
 
-It **checks facts, not judgment**: every verdict follows from your recorded execution state and your rules (generated from the tool specs you already have), so it's explainable and only ever says _no_ for a reason you can point to. The core is a general propositional-logic engine (cross-checked against z3), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
+It **checks facts, not judgment**: every verdict follows from your recorded execution state and your rules (generated from the tool specs you already have), so it's explainable and only ever says _no_ for a reason you can point to. The core is a general propositional-logic engine (cross-checked against [z3](https://github.com/Z3Prover/z3)), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
 
 ## The idea
 
-In Wittgenstein's Tractatus (1921), he argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make. The gate checks the rules themselves, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
+In his *Tractatus* (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
 
 ## Why
 
