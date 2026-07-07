@@ -4,15 +4,15 @@ Deterministic logic validation for AI agent tool calls.
 
 A truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object) before they run. No model, no API, no network. Microseconds per check.
 
-It's a **gate, not a model**: deterministic, explainable, and it can only ever say *no* for a reason you wrote down, the opposite of an LLM judging another LLM. The core is a general propositional-logic engine (cross-checked against z3), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
+It **checks facts, not judgment**: every verdict follows from your recorded execution state and your rules (generated from the tool specs you already have), so it's explainable and only ever says _no_ for a reason you can point to. The core is a general propositional-logic engine (cross-checked against z3), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
 
 ## The idea
 
-Wittgenstein's *Tractatus* (1921): a statement's content is the set of possibilities it rules out. witt applies that one idea three times, to check an action against the facts, to audit whether your own rulebook is even coherent, and to notice when two rules secretly say the same thing. A hundred-year-old move in logic, turned into a safety gate.
+Wittgenstein's _Tractatus_ (1921): a statement's content is the set of possibilities it rules out. witt puts that one idea to work three ways: it **checks each action** (does this tool call land in a world your rules forbid, given what's already happened?), **audits the rulebook itself** (a rule that forbids nothing is dead weight; rules that forbid everything would freeze the agent, it flags both), and **spots duplicate rules** (two rules that exclude the same possibilities are secretly one).
 
 ## Why
 
-Agents pick tools wrong: they query databases before authenticating, send emails before composing them, read records they just deleted. These aren't hallucinations, they're logic errors, and logic errors are exactly what a truth table catches deterministically. The inputs are facts from the execution log (was auth called? did the user confirm?), not fuzzy NLP extractions, so there's no feature-extraction bottleneck and the false-positive rate is zero by construction.
+Agents pick tools wrong: they query databases before authenticating, send emails before composing them, read records they just deleted. These aren't hallucinations, they're logic errors, and logic errors are exactly what a truth table catches deterministically. And because the check reads the execution log directly rather than classifying intent, there's no feature-extraction step to misfire: the false-positive rate is zero by construction.
 
 ## Install
 
@@ -56,14 +56,14 @@ gate.check("summarize").allowed   # True
 `generate_rules` produces three rule types automatically:
 
 1. **Required parameters** — `Call_X → Has_X::param`, from the schema's `required` list.
-2. **Confirmations** — tools whose *name* contains a destructive verb (`delete`, `send`, `pay`, `book`, …) require **per-tool** confirmation. Confirming one action never authorizes another, and `record_success` consumes the confirmation so the next call must re-confirm. Confirm via `gate.confirm("delete_record")` (or `gate.confirm()` for the tool just checked).
+2. **Confirmations** — tools whose _name_ contains a destructive verb (`delete`, `send`, `pay`, `book`, …) require **per-tool** confirmation. Confirming one action never authorizes another, and `record_success` consumes the confirmation so the next call must re-confirm. Confirm via `gate.confirm("delete_record")` (or `gate.confirm()` for the tool just checked).
 3. **Dependencies** — from the `dependencies` argument, or mined from traces with `infer_dependencies_from_traces()` (correlation-based; review before using as hard gates).
 
-It also couples `Done_X ↔ Result_X` (the `StateTracker` sets both on success), so a state with one but not the other is flagged *impossible*, not merely invalid. Free at runtime, and disable-able with `model_state_space=False`.
+It also couples `Done_X ↔ Result_X` (the `StateTracker` sets both on success), so a state with one but not the other is flagged _impossible_, not merely invalid. Free at runtime, and disable-able with `model_state_space=False`.
 
 ### Argument binding
 
-A plain dependency is satisfied by *any* completed prerequisite: `tool_b requires tool_a` lets the agent do `tool_a` on one object and `tool_b` on a different one. When the two calls must concern the **same object**, pass `bindings`:
+A plain dependency is satisfied by _any_ completed prerequisite: `tool_b requires tool_a` lets the agent do `tool_a` on one object and `tool_b` on a different one. When the two calls must concern the **same object**, pass `bindings`:
 
 ```python
 engine = generate_rules(
@@ -83,7 +83,7 @@ gate.check("issue_refund", params={"order_id": "Z-0000", "amount": 10}).allowed
 #           to have completed with order_id='Z-0000' (get_order completed with order_id=['A-4471'])"
 ```
 
-This is object *identity*, not a value judgment: it checks `tool_b` acts on the object `tool_a` produced, never whether a value is *correct*. It compares runtime argument values (which the boolean engine never sees), so it's enforced in the `Supervisor` and reported on `verdict.binding_violations`. A bound dependency implies ordering, so it subsumes the plain `dependencies` entry.
+This is object _identity_, not a value judgment: it checks `tool_b` acts on the object `tool_a` produced, never whether a value is _correct_. It compares runtime argument values (which the boolean engine never sees), so it's enforced in the `Supervisor` and reported on `verdict.binding_violations`. A bound dependency implies ordering, so it subsumes the plain `dependencies` entry.
 
 ### The agent loop
 
@@ -113,7 +113,10 @@ Register with any MCP client (`.mcp.json` for Claude Code):
 ```json
 {
   "mcpServers": {
-    "witt": {"command": "/abs/path/.venv/bin/python", "args": ["/abs/path/mcp_server.py"]}
+    "witt": {
+      "command": "/abs/path/.venv/bin/python",
+      "args": ["/abs/path/mcp_server.py"]
+    }
   }
 }
 ```
@@ -137,7 +140,7 @@ e.rule("ambiguity blocks execution",
 
 ### The possibility space
 
-Rules say what the agent may *do*. The **space** says what is even *possible*: the internal relations between facts. A session can't be both live and expired; a completed search always has a result. Declare these or the truth table enumerates impossible worlds, and a "counterexample" or "conflict" can be pure fantasy.
+Rules say what the agent may _do_. The **space** says what is even _possible_: the internal relations between facts. A session can't be both live and expired; a completed search always has a result. Declare these or the truth table enumerates impossible worlds, and a "counterexample" or "conflict" can be pure fantasy.
 
 ```python
 e.incompatible("SessionLive", "SessionExpired")   # at most one
@@ -150,7 +153,7 @@ The payoff: incoherent state is caught distinctly from a forbidden action (the `
 
 ### Auditing the rules
 
-The gate validates tool calls against the rules; `audit()` validates the *rules themselves*. Rule quality is the whole ceiling of this approach, so this is where you keep it honest.
+The gate validates tool calls against the rules; `audit()` validates the _rules themselves_. Rule quality is the whole ceiling of this approach, so this is where you keep it honest.
 
 ```python
 report = engine.audit()
@@ -169,23 +172,23 @@ Two claims, tested separately, because they're different claims.
 
 **1. The engine is logically correct.** 1,500 randomized formulas are cross-checked against [z3](https://github.com/Z3Prover/z3), an independent SMT solver sharing no code with witt: evaluation, entailment (including every classical fallacy), conflict detection, vacuity, and possibility-space filtering all agree, on every case. Soundness in the only sense that matters, it computes the same function classical logic does. (`tests/test_differential.py`)
 
-**2. The rules catch structural tool-call errors at zero false positives, judged by an independent oracle.** BFCL multi-turn ships executable stateful classes; the harness executes each call sequence, labels a mutation "broke the task" by its *actual effect* (final state + return values vs. ground truth), and only then gates it with a frozen, spec-derived engine. Mutations are generated blind to the rules. (`examples/oracle_eval.py`, `tests/test_oracle.py`)
+**2. The rules catch structural tool-call errors at zero false positives, judged by an independent oracle.** BFCL multi-turn ships executable stateful classes; the harness executes each call sequence, labels a mutation "broke the task" by its _actual effect_ (final state + return values vs. ground truth), and only then gates it with a frozen, spec-derived engine. Mutations are generated blind to the rules. (`examples/oracle_eval.py`, `tests/test_oracle.py`)
 
 Recall per error class (train/test split; some simulators are stochastic, so run the script for current values):
 
-| Error class | spec-only rules | + mined dependencies |
-|---|---|---|
-| Missing required argument (structural) | **~0.96** | ~0.96 |
-| Wrong-but-valid value (semantic) | ~0.00 | ~0.20 |
-| Reordered / missing prerequisite | ~0.00 | ~0.28 |
-| Swapped tool | ~0.7 | ~0.9 |
-| **False positives on valid ground truth** | **0** | **~15-20%** |
+| Error class                               | spec-only rules | + mined dependencies |
+| ----------------------------------------- | --------------- | -------------------- |
+| Missing required argument (structural)    | **~0.96**       | ~0.96                |
+| Wrong-but-valid value (semantic)          | ~0.00           | ~0.20                |
+| Reordered / missing prerequisite          | ~0.00           | ~0.28                |
+| Swapped tool                              | ~0.7            | ~0.9                 |
+| **False positives on valid ground truth** | **0**           | **~15-20%**          |
 
 Read this as the competence boundary, not a grade:
 
 - **Structural errors: caught near-perfectly, at zero false positives.** Every valid ground-truth sequence is allowed; every dropped required argument is blocked. This is the defensible guarantee.
-- **Value/semantic errors: mostly invisible.** Presence-checking can't see `mv(source='wrong.txt')` when the argument is present but wrong. (Argument *binding* closes the narrow "wrong object" case; a genuinely-wrong value it can't.)
-- **The "0 false positives" guarantee is only as safe as your rules.** Required-param rules are mechanically certain, so they never misfire. *Mined* dependencies raise recall on ordering but reintroduce false positives (correlation, not causation), so add them with eyes open.
+- **Value/semantic errors: mostly invisible.** Presence-checking can't see `mv(source='wrong.txt')` when the argument is present but wrong. (Argument _binding_ closes the narrow "wrong object" case; a genuinely-wrong value it can't.)
+- **The "0 false positives" guarantee is only as safe as your rules.** Required-param rules are mechanically certain, so they never misfire. _Mined_ dependencies raise recall on ordering but reintroduce false positives (correlation, not causation), so add them with eyes open.
 
 200/200 valid BFCL sequences allowed, 0 false positives, 229 injected errors caught. Latency ~370 μs on the full 159-rule engine. Full suite: 1,599 tests.
 
@@ -217,26 +220,26 @@ The same shape covers workflow/state-machine guards ("no refund after archive"),
 
 ## API surface
 
-| | |
-|---|---|
-| `TruthTableEngine` | core engine: `prop`, `rule`, `validate`, `validate_closed`, `check_entailment`, `find_conflicts`, `truth_table`, `to_json`/`from_json` |
-| possibility space | `incompatible`, `coupled`, `one_of`, `constrain`: declare which worlds are genuinely possible |
-| rule auditing | `audit`, `is_vacuous`, `minimal_conflicts` |
-| `Supervisor` | the gate: `check`, `record_success`, `record_failure`, `confirm`, `unconfirm`, `stats`, `audit`; enforces argument `bindings` (`verdict.binding_violations`); `Supervisor(engine, strict=True)` fails at construction on a contradictory ruleset |
-| `StateTracker` | execution state: `set`, `on_tool_success`, `completed_with`, `snapshot`, `history` |
-| `generate_rules` | tool specs → engine; accepts `dependencies`, `require_confirmation`, `bindings` |
-| `infer_dependencies_from_traces` | mine ordering constraints from logs |
-| `normalize_bindings` | canonicalize the `bindings` argument |
+|                                  |                                                                                                                                                                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TruthTableEngine`               | core engine: `prop`, `rule`, `validate`, `validate_closed`, `check_entailment`, `find_conflicts`, `truth_table`, `to_json`/`from_json`                                                                                                           |
+| possibility space                | `incompatible`, `coupled`, `one_of`, `constrain`: declare which worlds are genuinely possible                                                                                                                                                    |
+| rule auditing                    | `audit`, `is_vacuous`, `minimal_conflicts`                                                                                                                                                                                                       |
+| `Supervisor`                     | the gate: `check`, `record_success`, `record_failure`, `confirm`, `unconfirm`, `stats`, `audit`; enforces argument `bindings` (`verdict.binding_violations`); `Supervisor(engine, strict=True)` fails at construction on a contradictory ruleset |
+| `StateTracker`                   | execution state: `set`, `on_tool_success`, `completed_with`, `snapshot`, `history`                                                                                                                                                               |
+| `generate_rules`                 | tool specs → engine; accepts `dependencies`, `require_confirmation`, `bindings`                                                                                                                                                                  |
+| `infer_dependencies_from_traces` | mine ordering constraints from logs                                                                                                                                                                                                              |
+| `normalize_bindings`             | canonicalize the `bindings` argument                                                                                                                                                                                                             |
 
 `validate_closed` (closed-world: absent fact = false) is what agent validation uses. `validate` (open-world: absent fact = free variable) is for pure logic checking; e.g. `check_entailment` correctly flags affirming-the-consequent and other fallacies.
 
 ## Why "witt"?
 
-Short for Wittgenstein. The three features above are one move from his *Tractatus* — a proposition's content is the set of possibilities it excludes — applied three times:
+Short for Wittgenstein. The three features above are one move from his _Tractatus_ — a proposition's content is the set of possibilities it excludes — applied three times:
 
-- **The possibility space** is his *logical space* (2.11); the colour-exclusion problem (6.3751) is exactly the bug it fixes.
+- **The possibility space** is his _logical space_ (2.11); the colour-exclusion problem (6.3751) is exactly the bug it fixes.
 - **Rule auditing** is his two degenerate truth-functions (4.46): a tautology "says nothing" (a vacuous rule), a contradiction can't be satisfied (a conflicting ruleset).
-- **Rule identity** is *sense = truth-conditions* (4.431): two rules are the same when they permit the same worlds.
+- **Rule identity** is _sense = truth-conditions_ (4.431): two rules are the same when they permit the same worlds.
 
 You don't need any of this to use the tool; it's just why it's shaped the way it is.
 
