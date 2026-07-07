@@ -8,7 +8,7 @@ It **checks facts, not judgment**: every verdict follows from your recorded exec
 
 ## The idea
 
-In his *Tractatus* (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
+In his _Tractatus_ (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
 
 ## Why
 
@@ -235,7 +235,7 @@ The same shape covers workflow/state-machine guards ("no refund after archive"),
 
 ## Why "witt"?
 
-Short for Wittgenstein. The three features above are one move from his _Tractatus_ — a proposition's content is the set of possibilities it excludes — applied three times:
+Short for Wittgenstein. The three features above are one move from his _Tractatus_, a proposition's content is the set of possibilities it excludes:
 
 - **The possibility space** is his _logical space_ (2.11); the colour-exclusion problem (6.3751) is exactly the bug it fixes.
 - **Rule auditing** is his two degenerate truth-functions (4.46): a tautology "says nothing" (a vacuous rule), a contradiction can't be satisfied (a conflicting ruleset).
