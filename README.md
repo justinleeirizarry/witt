@@ -190,7 +190,7 @@ It reports the **minimal conflict core** — the smallest set of rules that actu
 
 **The engine computes logic correctly.** 1,500 random formulas are checked against z3; evaluation, entailment, conflict detection, vacuity, and possibility-space filtering agree on every one. (`tests/test_differential.py`)
 
-**The rules catch structural tool-call errors with zero false positives.** On BFCL's executable multi-turn tasks, the harness runs each call sequence and decides whether a mutation broke it by its _actual effect_ (final state and return values vs. ground truth) — then checks whether the engine caught it. The errors are generated blind to the rules, so an independent oracle, not witt, decides what counts as broken. (`examples/oracle_eval.py`, `tests/test_oracle.py`)
+**The rules catch structural tool-call errors with zero false positives.** On BFCL's executable multi-turn tasks, the harness runs each call sequence and decides whether a mutation broke it by its _actual effect_ (final state and return values vs. ground truth), then checks whether the engine caught it. The errors are generated blind to the rules, so an independent oracle, not witt, decides what counts as broken. (`examples/oracle_eval.py`, `tests/test_oracle.py`)
 
 Recall per error class (train/test split; some simulators are stochastic, so run the script for current values):
 
@@ -205,10 +205,8 @@ Recall per error class (train/test split; some simulators are stochastic, so run
 Read this as a map of the competence boundary:
 
 - **Structural errors: caught near-perfectly, at zero false positives.** Every valid ground-truth sequence is allowed; every dropped required argument is blocked. This is the defensible guarantee.
-- **Fabricated values: now mostly caught.** Grounding flags values that appear nowhere in the request, specs, or prior results (~0.85 recall, from ~0). Derived values — translations and computations — account for the flagged valid runs, so violations surface as warnings and the run continues. (`examples/grounding_eval.py`)
+- **Fabricated values: now mostly caught.** Grounding flags values that appear nowhere in the request, specs, or prior results (~0.85 recall, from ~0). Derived values, translations and computations, account for the flagged valid runs, so violations surface as warnings and the run continues. (`examples/grounding_eval.py`)
 - **The "0 false positives" guarantee is only as safe as your rules.** Required-param rules are mechanically certain, so they never misfire. _Mined_ dependencies raise recall on ordering but reintroduce false positives (they capture correlation rather than causation), so add them with eyes open.
-
-Latency ~370 μs on the full 159-rule engine. Full suite: 1,624 tests.
 
 ## API surface
 
