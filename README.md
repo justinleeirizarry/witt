@@ -4,15 +4,15 @@ Deterministic logic validation for AI agent tool calls.
 
 Witt is a truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object, fabricated argument values) before they run.
 
-Every verdict is **a matter of fact**: it follows from your recorded execution state and your rules (generated from the tool specs you already have), so it's explainable and only ever says _no_ for a reason you can point to. The core is a general propositional-logic engine (cross-checked against [z3](https://github.com/Z3Prover/z3)), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
+Every check is computed from your recorded execution state and generated automatically from the tool specs. Underneath, it's a general-purpose logic engine whose correctness is verified against [z3](https://github.com/Z3Prover/z3), an independent industrial solver.
 
 ## The idea
 
-In his *Tractatus* (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
+In his _Tractatus_ (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
 
 ## Why
 
-Agents pick the wrong tools: they query databases before authenticating, send emails before composing them, read records they just deleted. These aren't hallucinations, they're logic errors, and logic errors are exactly what a truth table catches deterministically. And because the check reads the execution log directly rather than classifying intent, there's no feature-extraction step to misfire: the false-positive rate is zero by construction.
+Agents pick the wrong tools: And because the check reads the execution log directly rather than classifying intent, there's no feature-extraction step to misfire: the false-positive rate is zero by construction.
 
 ## Install
 
@@ -87,9 +87,7 @@ This checks object _identity_: whether `tool_b` acts on the same object `tool_a`
 
 ### Grounding: fabricated-argument detection
 
-> "A name means an object. The object is its meaning." (*Tractatus* 3.203)
-
-Every identifier an agent passes — a symbol, a file name, an ID — must appear somewhere it could have legitimately come from: the user's request, the tool specs, the config, or a prior result. A value found nowhere in that corpus is a name without a bearer, and almost certainly hallucinated. Where the engine validates the logical form of a call, grounding validates its reference.
+Every identifier an agent passes, a symbol, a file name, an ID, must trace back to somewhere it could have come from: the user's request, the tool specs, the config, or a prior result. A value that appears in none of them is almost certainly hallucinated.
 
 ```python
 from witt import Grounding, Supervisor, generate_rules
@@ -105,7 +103,7 @@ verdict = gate.check("place_order", params={"symbol": "TSLA"})
 gate.record_success("get_stock_info", result=response)  # results feed the corpus
 ```
 
-Derived values are the known blind spot: a translation (city → airport code) or a computation ("fill the tank" → capacity − current) is legitimate yet appears nowhere in the corpus. The default `warn` mode absorbs this — an ungrounded value surfaces in the feedback for confirmation while the run continues. Reserve `strict` for settings where every legitimate value provably flows through the corpus. Free-text params, booleans, small numbers, and ISO dates are skipped by design.
+The default `warn` mode surfaces ungrounded values in the feedback without blocking; use `strict` where every legitimate value provably comes from the corpus.
 
 ### The agent loop
 
@@ -190,21 +188,19 @@ It reports the **minimal conflict core** — the smallest set of rules that actu
 
 ## Results
 
-Two claims, tested separately, because they're different claims.
+**The engine computes logic correctly.** 1,500 random formulas are checked against z3; evaluation, entailment, conflict detection, vacuity, and possibility-space filtering agree on every one. (`tests/test_differential.py`)
 
-**1. The engine is logically correct.** 1,500 randomized formulas are cross-checked against [z3](https://github.com/Z3Prover/z3), an independent SMT solver sharing no code with witt: evaluation, entailment (including every classical fallacy), conflict detection, vacuity, and possibility-space filtering all agree, on every case. Soundness in the only sense that matters, it computes the same function classical logic does. (`tests/test_differential.py`)
-
-**2. The rules catch structural tool-call errors at zero false positives, judged by an independent oracle.** BFCL multi-turn ships executable stateful classes; the harness executes each call sequence, labels a mutation "broke the task" by its _actual effect_ (final state + return values vs. ground truth), and only then gates it with a frozen, spec-derived engine. Mutations are generated blind to the rules. (`examples/oracle_eval.py`, `tests/test_oracle.py`)
+**The rules catch structural tool-call errors with zero false positives.** On BFCL's executable multi-turn tasks, the harness runs each call sequence and decides whether a mutation broke it by its _actual effect_ (final state and return values vs. ground truth) — then checks whether the engine caught it. The errors are generated blind to the rules, so an independent oracle, not witt, decides what counts as broken. (`examples/oracle_eval.py`, `tests/test_oracle.py`)
 
 Recall per error class (train/test split; some simulators are stochastic, so run the script for current values):
 
-| Error class                               | spec-only rules | + mined dependencies | + grounding |
-| ----------------------------------------- | --------------- | -------------------- | ----------- |
-| Missing required argument (structural)    | **~0.96**       | ~0.96                | **~0.98**   |
-| Wrong-but-valid value (semantic)          | ~0.00           | ~0.20                | **~0.85**   |
-| Reordered / missing prerequisite          | ~0.00           | ~0.28                | ~0.29       |
-| Swapped tool                              | ~0.7            | ~0.9                 | ~0.78       |
-| **Valid ground-truth runs flagged**       | **0**           | ~15-20%              | ~20% (warnings) |
+| Error class                            | spec-only rules | + mined dependencies | + grounding     |
+| -------------------------------------- | --------------- | -------------------- | --------------- |
+| Missing required argument (structural) | **~0.96**       | ~0.96                | **~0.98**       |
+| Wrong-but-valid value (semantic)       | ~0.00           | ~0.20                | **~0.85**       |
+| Reordered / missing prerequisite       | ~0.00           | ~0.28                | ~0.29           |
+| Swapped tool                           | ~0.7            | ~0.9                 | ~0.78           |
+| **Valid ground-truth runs flagged**    | **0**           | ~15-20%              | ~20% (warnings) |
 
 Read this as a map of the competence boundary:
 
@@ -213,32 +209,6 @@ Read this as a map of the competence boundary:
 - **The "0 false positives" guarantee is only as safe as your rules.** Required-param rules are mechanically certain, so they never misfire. _Mined_ dependencies raise recall on ordering but reintroduce false positives (they capture correlation rather than causation), so add them with eyes open.
 
 Latency ~370 μs on the full 159-rule engine. Full suite: 1,624 tests.
-
-## Beyond tool calling
-
-The core is a general propositional-logic engine, so it fits **anywhere you express state as boolean facts and want a fast, deterministic, explainable "is this allowed / consistent?" check**, with the rules auditable for contradictions before you ship.
-
-```python
-from witt import TruthTableEngine
-
-e = TruthTableEngine()
-e.rule("dark mode needs the new UI", e.IMPLIES("dark_mode", "new_ui"))
-e.rule("SSO needs an org plan",       e.IMPLIES("sso", "org_plan"))
-e.incompatible("cache", "debug")      # can't ship both at once
-
-e.validate_closed({"dark_mode": True, "new_ui": False})["violations"]
-# → ["dark mode needs the new UI"]
-e.audit()["conflicts"]                # → []  (or the minimal conflicting rule set)
-```
-
-The same shape covers workflow/state-machine guards ("no refund after archive"), access-control policy (`delete → admin ∧ confirmed`), eligibility rules (`loan → income_verified ∧ ¬flagged`), CI/CD gates (`prod_deploy → tests_passed ∧ approved ∧ ¬freeze`), and cross-field form validation (`country=US → state_required`).
-
-## Limits
-
-- **It sees structure.** It enforces "an amount is present and confirmed"; it can't know `amount=1000` should have been `100`. Ground comparisons to booleans (`amount > 100` is a fact something else computes and feeds in).
-- **Propositional only.** No quantifiers ("all suppliers must…"); ground them into per-instance propositions.
-- **Exponential in free variables.** The engine caps at 22 free variables per expression; in closed-world agent validation everything is pinned, so this never bites.
-- **The rules are the ceiling.** The gate catches what the rules describe. Rule quality is the product; `generate_rules` + trace mining get you most of the way.
 
 ## API surface
 
@@ -254,33 +224,6 @@ The same shape covers workflow/state-machine guards ("no refund after archive"),
 | `normalize_bindings`             | canonicalize the `bindings` argument                                                                                                                                                                                                             |
 
 `validate_closed` (closed-world: absent fact = false) is what agent validation uses. `validate` (open-world: absent fact = free variable) is for pure logic checking; e.g. `check_entailment` correctly flags affirming-the-consequent and other fallacies.
-
-## Why "witt"?
-
-Short for Wittgenstein. The three features above are one move from his _Tractatus_ — a proposition's content is the set of possibilities it excludes — applied three times:
-
-- **The possibility space** is his _logical space_ (2.11); the colour-exclusion problem (6.3751) is exactly the bug it fixes.
-- **Rule auditing** is his two degenerate truth-functions (4.46): a tautology "says nothing" (a vacuous rule), a contradiction can't be satisfied (a conflicting ruleset).
-- **Rule identity** is _sense = truth-conditions_ (4.431): two rules are the same when they permit the same worlds.
-
-You don't need any of this to use the tool; it's just why it's shaped the way it is.
-
-## Running the benchmarks
-
-```bash
-# Engine correctness vs. z3 (no data needed)
-pip install z3-solver && pytest tests/test_differential.py
-
-# Structural benchmark + the independent execution oracle
-git clone --depth 1 https://github.com/ShishirPatil/gorilla
-pip install mpmath   # some BFCL backend classes need it
-export GORILLA_ROOT=gorilla/berkeley-function-call-leaderboard
-export BFCL_DATA_DIR=$GORILLA_ROOT/bfcl_eval/data
-pytest tests/test_bfcl.py tests/test_oracle.py -v
-
-# The full confusion matrix (per-category recall, false positives, mined-deps tradeoff)
-python examples/oracle_eval.py
-```
 
 ## License
 
