@@ -17,12 +17,15 @@ params, unconfirmed destructive actions) before they run.
     else:
         agent.retry(verdict.feedback)
 
-Validated: 200/200 valid BFCL multi-turn sequences allowed, 0 false
-positives; engine cross-checked against z3 on 1,500 random formulas.
+Validated against a rule-blind mutation adversary judged by execution
+(BFCL multi-turn environments): structural errors caught at ~98% recall
+with zero false positives; fabricated argument values at ~85% with
+grounding enabled. Engine cross-checked against z3 on 1,500 formulas.
 """
 
 from .engine import TruthTableEngine
 from .state import StateTracker
+from .grounding import Grounding
 from .supervisor import Supervisor, Verdict, ContradictoryRuleset
 from .autogen import (
     generate_rules,
@@ -36,6 +39,7 @@ from .autogen import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "Grounding",
     "TruthTableEngine",
     "StateTracker",
     "Supervisor",

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from .engine import TruthTableEngine
 from .state import StateTracker
 from .autogen import action_prop, param_prop, confirm_prop
+from .grounding import Grounding
 
 
 class ContradictoryRuleset(ValueError):
@@ -34,6 +35,7 @@ class Verdict:
     violations: list[str] = field(default_factory=list)
     space_violations: list[str] = field(default_factory=list)
     binding_violations: list[str] = field(default_factory=list)
+    grounding_violations: list[str] = field(default_factory=list)
     feedback: str = ""
     latency_us: float = 0.0
 
@@ -56,9 +58,11 @@ class Supervisor:
     """
 
     def __init__(self, engine: TruthTableEngine, state: StateTracker | None = None,
-                 strict: bool = False):
+                 strict: bool = False, grounding: Grounding | None = None):
         self.engine = engine
         self.state = state or StateTracker()
+        # Optional fabricated-argument detection (see witt.grounding).
+        self.grounding = grounding
         # Argument-bound dependencies (object identity across steps), enforced
         # here rather than in the boolean engine. See generate_rules(bindings=).
         self.bindings: dict = getattr(engine, "bindings", {}) or {}
@@ -125,9 +129,15 @@ class Supervisor:
                 props[param_prop(tool_name, p)] = True
 
         result = self.engine.validate_closed(props)
-        # Argument binding is object identity, not logical structure — it
+        # Argument binding is object identity rather than logical structure — it
         # runs alongside the boolean engine, on the actual argument values.
         binding_violations = self._binding_violations(tool_name, params)
+        grounding_violations = []
+        if self.grounding is not None:
+            grounding_violations = [
+                f"{tool_name}({p}={v!r}): value appears nowhere in user "
+                f"request, tool specs, or prior results — possibly fabricated"
+                for p, v in self.grounding.ungrounded(params)]
         latency = (time.perf_counter() - t0) * 1_000_000
 
         space_violations = result.get("space_violations", [])
@@ -137,15 +147,23 @@ class Supervisor:
         if binding_violations:
             msgs.append("Argument mismatch: " + "; ".join(binding_violations))
         if space_violations:
-            # The state itself is impossible — not a forbidden action, an
-            # incoherent world. Distinct signal, distinct fix.
+            # The state itself is impossible: an incoherent world rather
+            # than a forbidden action. Distinct signal, distinct fix.
             msgs.append("Incoherent state: " + "; ".join(space_violations))
+        if grounding_violations:
+            label = ("Blocked (ungrounded)" if self.grounding.mode == "strict"
+                     else "Warning (ungrounded)")
+            msgs.append(label + ": " + "; ".join(grounding_violations))
 
+        blocked_by_grounding = bool(grounding_violations) and \
+            self.grounding is not None and self.grounding.mode == "strict"
         verdict = Verdict(
-            allowed=result["valid"] and not binding_violations,
+            allowed=result["valid"] and not binding_violations
+                    and not blocked_by_grounding,
             violations=result["violations"],
             space_violations=space_violations,
             binding_violations=binding_violations,
+            grounding_violations=grounding_violations,
             feedback=" | ".join(msgs),
             latency_us=latency,
         )
@@ -181,7 +199,7 @@ class Supervisor:
 
     # ── State updates ────────────────────────────────────────────
     def record_success(self, tool_name: str, extra_state: dict | None = None,
-                       params: dict | None = None):
+                       params: dict | None = None, result=None):
         """Call after a tool executes successfully. Also *consumes* any
         confirmation for this tool, so the next destructive call must be
         confirmed afresh rather than riding a stale approval.
@@ -193,6 +211,9 @@ class Supervisor:
         if params is None:
             params = self._last_params.get(tool_name)
         self.state.on_tool_success(tool_name, extra_state, params)
+        if self.grounding is not None and result is not None:
+            # Tool output becomes legitimate grounding for later values.
+            self.grounding.observe(result)
         self.state.set(confirm_prop(tool_name), False)
         return self
 

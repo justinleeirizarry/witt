@@ -84,8 +84,9 @@ def normalize_bindings(bindings: dict | None) -> dict:
 
     A binding says: calling `tool` with argument `param` requires that a
     prior `dep` call *completed with the matching value*. This is object
-    identity, not logical structure — so it is enforced by the Supervisor
-    layer, not the boolean engine (which reasons about structure only).
+    identity rather than logical structure — so it is enforced by the
+    Supervisor layer instead of the boolean engine (which reasons about
+    structure only).
 
     `param` names the argument on the *calling* tool; `dep_param` names the
     argument the dependency must have matched (defaults to `param` when the
@@ -132,7 +133,8 @@ def generate_rules(
         dependencies: {"tool_b": ["tool_a"]} — tool_b requires tool_a done first
         bindings: argument-bound dependencies — {"tool_b": [{"tool":
             "tool_a", "param": "id"}]} means tool_b called with id=V requires
-            a tool_a that *completed with id=V*, not merely that some tool_a
+            a tool_a that *completed with id=V*, beyond merely requiring
+            that some tool_a
             ran. This enforces object identity across steps, which the boolean
             engine cannot; it is stored on the engine and enforced by the
             Supervisor. A bound dependency also implies ordering (the dep must
@@ -227,12 +229,12 @@ def infer_dependencies_from_traces(traces: list[list[str]], min_support: float =
     If tool B is preceded by tool A in at least `min_support` of B's
     occurrences, propose B depends on A.
 
-    CAUTION — this is correlation, not causation. "A usually precedes B"
+    CAUTION — this captures correlation rather than causation. "A usually precedes B"
     does not mean B *requires* A; habitual sequencing and common causes
     produce spurious dependencies (e.g. `cp requires cd`). Dependencies
     mined this way can introduce false positives when used as hard gates
     (see examples/oracle_eval.py). Review before trusting them, and note
-    the default threshold is 0.95, not 1.0 — a proposed dependency may be
+    the default threshold is 0.95 rather than 1.0 — a proposed dependency may be
     violated by up to 1 in 20 traces.
 
     Args:

@@ -62,7 +62,7 @@ def configure(
         dependencies: {"tool_b": ["tool_a"]} — tool_b needs tool_a done first.
         bindings: argument-bound dependencies — object identity across steps.
             {"tool_b": [{"tool": "tool_a", "param": "id"}]} means tool_b with
-            id=V requires a tool_a that *completed with id=V*, not merely that
+            id=V requires a tool_a that *completed with id=V*, beyond merely requiring that
             some tool_a ran. Enforced by the gate (not the boolean engine). A
             bound dependency also implies ordering, so you don't also need it
             in `dependencies`.

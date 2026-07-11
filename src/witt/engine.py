@@ -109,7 +109,7 @@ class TruthTableEngine:
     def constrain(self, name: str, expr):
         """Add a raw axiom every genuine world must satisfy.
 
-        Like `rule`, but a violating world is *impossible*, not invalid.
+        Like `rule`, but a violating world is *impossible* rather than invalid.
         Auto-registers referenced variables."""
         for var in self._get_vars(expr):
             if var not in self.propositions:
@@ -371,7 +371,7 @@ class TruthTableEngine:
         shared variables. Variable-disjoint rules are logically
         independent — they can't conflict with, entail, or subsume one
         another — so each component can be audited on its own. This is
-        what keeps auditing tractable: 2^(small component), never 2^(all).
+        what keeps auditing tractable: 2^(small component) instead of 2^(all).
         """
         if max_vars is None:
             max_vars = self.MAX_VARS
@@ -486,7 +486,7 @@ class TruthTableEngine:
                   "unauditable": []}
 
         # ── Vacuity is a per-rule property (depends only on that rule's
-        # own variables, not its whole component), so check it cheaply
+        # own variables rather than its whole component), so check it cheaply
         # and independently of the component join. ──
         for r in self.rules:
             vs = self._constraint_closure(self._get_vars(r["expr"]))

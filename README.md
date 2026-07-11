@@ -2,13 +2,13 @@
 
 Deterministic logic validation for AI agent tool calls.
 
-Witt is a truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object) before they run.
+Witt is a truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object, fabricated argument values) before they run.
 
-It **checks facts, not judgment**: every verdict follows from your recorded execution state and your rules (generated from the tool specs you already have), so it's explainable and only ever says _no_ for a reason you can point to. The core is a general propositional-logic engine (cross-checked against [z3](https://github.com/Z3Prover/z3)), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
+Every verdict is **a matter of fact**: it follows from your recorded execution state and your rules (generated from the tool specs you already have), so it's explainable and only ever says _no_ for a reason you can point to. The core is a general propositional-logic engine (cross-checked against [z3](https://github.com/Z3Prover/z3)), so it isn't limited to agents; see [Beyond tool calling](#beyond-tool-calling).
 
 ## The idea
 
-In his _Tractatus_ (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
+In his *Tractatus* (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
 
 ## Why
 
@@ -59,7 +59,7 @@ gate.check("summarize").allowed   # True
 2. **Confirmations** — tools whose _name_ contains a destructive verb (`delete`, `send`, `pay`, `book`, …) require **per-tool** confirmation. Confirming one action never authorizes another, and `record_success` consumes the confirmation so the next call must re-confirm. Confirm via `gate.confirm("delete_record")` (or `gate.confirm()` for the tool just checked).
 3. **Dependencies** — from the `dependencies` argument, or mined from traces with `infer_dependencies_from_traces()` (correlation-based; review before using as hard gates).
 
-It also couples `Done_X ↔ Result_X` (the `StateTracker` sets both on success), so a state with one but not the other is flagged _impossible_, not merely invalid. Free at runtime, and disable-able with `model_state_space=False`.
+It also couples `Done_X ↔ Result_X` (the `StateTracker` sets both on success), so a state with one but not the other is flagged as _impossible_ — a stronger signal than an ordinary rule violation. Free at runtime, and disable-able with `model_state_space=False`.
 
 ### Argument binding
 
@@ -83,7 +83,29 @@ gate.check("issue_refund", params={"order_id": "Z-0000", "amount": 10}).allowed
 #           to have completed with order_id='Z-0000' (get_order completed with order_id=['A-4471'])"
 ```
 
-This is object _identity_, not a value judgment: it checks `tool_b` acts on the object `tool_a` produced, never whether a value is _correct_. It compares runtime argument values (which the boolean engine never sees), so it's enforced in the `Supervisor` and reported on `verdict.binding_violations`. A bound dependency implies ordering, so it subsumes the plain `dependencies` entry.
+This checks object _identity_: whether `tool_b` acts on the same object `tool_a` produced. Whether the value itself is _correct_ stays outside its scope. It compares runtime argument values (which the boolean engine never sees), so it's enforced in the `Supervisor` and reported on `verdict.binding_violations`. A bound dependency implies ordering, so it subsumes the plain `dependencies` entry.
+
+### Grounding: fabricated-argument detection
+
+> "A name means an object. The object is its meaning." (*Tractatus* 3.203)
+
+Every identifier an agent passes — a symbol, a file name, an ID — must appear somewhere it could have legitimately come from: the user's request, the tool specs, the config, or a prior result. A value found nowhere in that corpus is a name without a bearer, and almost certainly hallucinated. Where the engine validates the logical form of a call, grounding validates its reference.
+
+```python
+from witt import Grounding, Supervisor, generate_rules
+
+g = Grounding(user_text=request, tool_specs=tools, mode="warn")
+gate = Supervisor(generate_rules(tools), grounding=g)
+
+verdict = gate.check("place_order", params={"symbol": "TSLA"})
+# verdict.grounding_violations →
+#   ["place_order(symbol='TSLA'): value appears nowhere in user request,
+#     tool specs, or prior results — possibly fabricated"]
+
+gate.record_success("get_stock_info", result=response)  # results feed the corpus
+```
+
+Derived values are the known blind spot: a translation (city → airport code) or a computation ("fill the tank" → capacity − current) is legitimate yet appears nowhere in the corpus. The default `warn` mode absorbs this — an ungrounded value surfaces in the feedback for confirmation while the run continues. Reserve `strict` for settings where every legitimate value provably flows through the corpus. Free-text params, booleans, small numbers, and ISO dates are skipped by design.
 
 ### The agent loop
 
@@ -101,7 +123,7 @@ See `examples/agent_loop.py` for a runnable version.
 
 ## Try it live (MCP server)
 
-`mcp_server.py` exposes the gate as MCP tools, so you or an agent can walk a real scenario and watch each call get allowed or blocked with the exact feedback an LLM would receive. It's a demo surface: in production witt is middleware the harness runs before every tool call, not a tool the model chooses.
+`mcp_server.py` exposes the gate as MCP tools, so you or an agent can walk a real scenario and watch each call get allowed or blocked with the exact feedback an LLM would receive. It's a demo surface: in production witt is middleware the harness runs before every tool call, rather than a tool the model chooses.
 
 ```bash
 pip install -e ".[mcp]"
@@ -164,7 +186,7 @@ report = engine.audit()
 # report["impossible_space"] constraint sets that admit no world at all
 ```
 
-It reports the **minimal conflict core** (the smallest set of rules that actually contradict), not "all your rules conflict," and decomposes the ruleset into variable-disjoint components so it scales: it audits the 159-rule / 385-proposition BFCL engine (a naive table would be `2^240`) in a few milliseconds. See `examples/rule_audit.py`.
+It reports the **minimal conflict core** — the smallest set of rules that actually contradict, sparing you an unhelpful "all your rules conflict" — and decomposes the ruleset into variable-disjoint components so it scales: it audits the 159-rule / 385-proposition BFCL engine (a naive table would be `2^240`) in a few milliseconds. See `examples/rule_audit.py`.
 
 ## Results
 
@@ -176,21 +198,21 @@ Two claims, tested separately, because they're different claims.
 
 Recall per error class (train/test split; some simulators are stochastic, so run the script for current values):
 
-| Error class                               | spec-only rules | + mined dependencies |
-| ----------------------------------------- | --------------- | -------------------- |
-| Missing required argument (structural)    | **~0.96**       | ~0.96                |
-| Wrong-but-valid value (semantic)          | ~0.00           | ~0.20                |
-| Reordered / missing prerequisite          | ~0.00           | ~0.28                |
-| Swapped tool                              | ~0.7            | ~0.9                 |
-| **False positives on valid ground truth** | **0**           | **~15-20%**          |
+| Error class                               | spec-only rules | + mined dependencies | + grounding |
+| ----------------------------------------- | --------------- | -------------------- | ----------- |
+| Missing required argument (structural)    | **~0.96**       | ~0.96                | **~0.98**   |
+| Wrong-but-valid value (semantic)          | ~0.00           | ~0.20                | **~0.85**   |
+| Reordered / missing prerequisite          | ~0.00           | ~0.28                | ~0.29       |
+| Swapped tool                              | ~0.7            | ~0.9                 | ~0.78       |
+| **Valid ground-truth runs flagged**       | **0**           | ~15-20%              | ~20% (warnings) |
 
-Read this as the competence boundary, not a grade:
+Read this as a map of the competence boundary:
 
 - **Structural errors: caught near-perfectly, at zero false positives.** Every valid ground-truth sequence is allowed; every dropped required argument is blocked. This is the defensible guarantee.
-- **Value/semantic errors: mostly invisible.** Presence-checking can't see `mv(source='wrong.txt')` when the argument is present but wrong. (Argument _binding_ closes the narrow "wrong object" case; a genuinely-wrong value it can't.)
-- **The "0 false positives" guarantee is only as safe as your rules.** Required-param rules are mechanically certain, so they never misfire. _Mined_ dependencies raise recall on ordering but reintroduce false positives (correlation, not causation), so add them with eyes open.
+- **Fabricated values: now mostly caught.** Grounding flags values that appear nowhere in the request, specs, or prior results (~0.85 recall, from ~0). Derived values — translations and computations — account for the flagged valid runs, so violations surface as warnings and the run continues. (`examples/grounding_eval.py`)
+- **The "0 false positives" guarantee is only as safe as your rules.** Required-param rules are mechanically certain, so they never misfire. _Mined_ dependencies raise recall on ordering but reintroduce false positives (they capture correlation rather than causation), so add them with eyes open.
 
-200/200 valid BFCL sequences allowed, 0 false positives, 229 injected errors caught. Latency ~370 μs on the full 159-rule engine. Full suite: 1,599 tests.
+Latency ~370 μs on the full 159-rule engine. Full suite: 1,624 tests.
 
 ## Beyond tool calling
 
@@ -213,7 +235,7 @@ The same shape covers workflow/state-machine guards ("no refund after archive"),
 
 ## Limits
 
-- **Structure, not values.** It enforces "an amount is present and confirmed"; it can't know `amount=1000` should have been `100`. Ground comparisons to booleans (`amount > 100` is a fact something else computes and feeds in).
+- **It sees structure.** It enforces "an amount is present and confirmed"; it can't know `amount=1000` should have been `100`. Ground comparisons to booleans (`amount > 100` is a fact something else computes and feeds in).
 - **Propositional only.** No quantifiers ("all suppliers must…"); ground them into per-instance propositions.
 - **Exponential in free variables.** The engine caps at 22 free variables per expression; in closed-world agent validation everything is pinned, so this never bites.
 - **The rules are the ceiling.** The gate catches what the rules describe. Rule quality is the product; `generate_rules` + trace mining get you most of the way.
@@ -235,7 +257,7 @@ The same shape covers workflow/state-machine guards ("no refund after archive"),
 
 ## Why "witt"?
 
-Short for Wittgenstein. The three features above are one move from his _Tractatus_, a proposition's content is the set of possibilities it excludes:
+Short for Wittgenstein. The three features above are one move from his _Tractatus_ — a proposition's content is the set of possibilities it excludes — applied three times:
 
 - **The possibility space** is his _logical space_ (2.11); the colour-exclusion problem (6.3751) is exactly the bug it fixes.
 - **Rule auditing** is his two degenerate truth-functions (4.46): a tautology "says nothing" (a vacuous rule), a contradiction can't be satisfied (a conflicting ruleset).
