@@ -1,18 +1,12 @@
 # witt
 
-Deterministic logic validation for AI agent tool calls.
+A deterministic logic validator for AI agent tool use, loosely based on the early philosophy of Ludwig Wittgenstein.
 
-Witt is a truth table engine that sits between an agent's decision and execution, catching invalid tool calls (missing prerequisites, missing parameters, unconfirmed destructive actions, wrong ordering, acting on the wrong object, fabricated argument values) before they run.
+Conceived as an alternative to human-in-the-loop or LLM-as-judge evaluators, witt is a truth table engine for catching invalid AI agent tool use.
 
-Every check is computed from your recorded execution state and generated automatically from the tool specs. Underneath, it's a general-purpose logic engine whose correctness is verified against [z3](https://github.com/Z3Prover/z3), an independent industrial solver.
+## What?
 
-## The idea
-
-In his _Tractatus_ (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt turns that premise in a log gate for agents: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them.
-
-## Why
-
-Agents pick the wrong tools: And because the check reads the execution log directly rather than classifying intent, there's no feature-extraction step to misfire: the false-positive rate is zero by construction.
+In _Tractatus Logico-Philosophicus_, Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt turns that premise into a logic gate for AI agent tool use.
 
 ## Install
 
@@ -40,7 +34,7 @@ tools = [
                     "required": ["to"]}},
 ]
 
-# Rules are generated from the specs; you don't write them by hand
+# Rules are generated from the specs.
 engine = generate_rules(tools, dependencies={"summarize": ["search_web"]})
 gate = Supervisor(engine)
 
@@ -83,7 +77,7 @@ gate.check("issue_refund", params={"order_id": "Z-0000", "amount": 10}).allowed
 #           to have completed with order_id='Z-0000' (get_order completed with order_id=['A-4471'])"
 ```
 
-This checks object _identity_: whether `tool_b` acts on the same object `tool_a` produced. Whether the value itself is _correct_ stays outside its scope. It compares runtime argument values (which the boolean engine never sees), so it's enforced in the `Supervisor` and reported on `verdict.binding_violations`. A bound dependency implies ordering, so it subsumes the plain `dependencies` entry.
+This checks object _identity_ — that `tool_b` acts on the same object `tool_a` produced, not whether the value is _correct_. It runs on the actual argument values in the `Supervisor`, reports on `verdict.binding_violations`, and implies ordering, so it subsumes a plain `dependencies` entry.
 
 ### Grounding: fabricated-argument detection
 
@@ -122,10 +116,11 @@ See `examples/agent_loop.py` for a runnable version.
 ## Try it live (MCP server)
 
 `mcp_server.py` exposes the gate as a set of MCP tools.
-pip install -e ".[mcp]"
-python mcp_server.py # stdio transport
 
-````
+```bash
+pip install -e ".[mcp]"
+python mcp_server.py     # stdio transport
+```
 
 Register with any MCP client (`.mcp.json` for Claude Code):
 
@@ -138,52 +133,19 @@ Register with any MCP client (`.mcp.json` for Claude Code):
     }
   }
 }
-````
+```
 
 Tools: `configure` (build rules from tool specs), `check` (the gate), `record_success`, `confirm`, `audit`, `state`, `reset`.
 
-## Writing rules directly
+## Beyond generated rules
 
-You don't need `generate_rules`; the engine is general.
+The engine is general, so you're not tied to `generate_rules`:
 
-```python
-from witt import TruthTableEngine
+- **Write rules by hand** on `TruthTableEngine` — e.g. `e.rule("no read after delete", e.IMPLIES("RecordDeleted", e.NOT("Call_read_record")))`.
+- **Declare the possibility space** with `incompatible` / `coupled` / `one_of` / `constrain`, so impossible worlds (a session both live and expired) never produce phantom counterexamples, and incoherent state is reported separately from a forbidden action.
+- **Audit the rules themselves** with `engine.audit()` — it flags vacuous, redundant, equivalent, and contradictory rules (the minimal conflict core), and scales to the 159-rule BFCL engine in milliseconds.
 
-e = TruthTableEngine()
-e.rule("no read after delete",
-       e.IMPLIES("RecordDeleted", e.NOT("Call_read_record")))
-e.rule("ambiguity blocks execution",
-       e.IMPLIES(e.AND("ClarificationNeeded", e.NOT("ClarificationResolved")),
-                 e.NOT("Call_execute")))
-```
-
-### The possibility space
-
-Rules say what the agent may _do_. The **space** says what is even _possible_: the internal relations between facts. A session can't be both live and expired; a completed search always has a result. Declare these or the truth table enumerates impossible worlds, and a "counterexample" or "conflict" can be pure fantasy.
-
-```python
-e.incompatible("SessionLive", "SessionExpired")   # at most one
-e.coupled("Done_search", "Has_search_result")     # all-or-none
-e.one_of("StatusOpen", "StatusClosed")            # exactly one
-e.constrain("premise", e.IMPLIES("A", "B"))        # any raw axiom
-```
-
-The payoff: incoherent state is caught distinctly from a forbidden action (the `Supervisor` reports `"Incoherent state: …"` separately from `"Blocked: …"`), and `check_entailment`/`find_conflicts` range only over genuine possibilities. With no space declared, behaviour is identical to plain rule validation. See `examples/possibility_space.py`.
-
-### Auditing the rules
-
-The gate validates tool calls against the rules; `audit()` validates the _rules themselves_. Rule quality is the whole ceiling of this approach, so this is where you keep it honest.
-
-```python
-report = engine.audit()
-# report["vacuous"]          rules true in every possible world (dead weight)
-# report["redundant"]        [{rule, entailed_by}] implied by the other rules
-# report["equivalent"]       groups of rules with identical sense
-# report["conflicts"]        minimal jointly-unsatisfiable rule sets
-# report["impossible_space"] constraint sets that admit no world at all
-```
-
-It reports the **minimal conflict core** — the smallest set of rules that actually contradict, sparing you an unhelpful "all your rules conflict" — and decomposes the ruleset into variable-disjoint components so it scales: it audits the 159-rule / 385-proposition BFCL engine (a naive table would be `2^240`) in a few milliseconds. See `examples/rule_audit.py`.
+See `examples/possibility_space.py` and `examples/rule_audit.py`.
 
 ## Results
 
@@ -201,11 +163,7 @@ Recall per error class (train/test split; some simulators are stochastic, so run
 | Swapped tool                           | ~0.7            | ~0.9                 | ~0.78           |
 | **Valid ground-truth runs flagged**    | **0**           | ~15-20%              | ~20% (warnings) |
 
-Read this as a map of the competence boundary:
-
-- **Structural errors: caught near-perfectly, at zero false positives.** Every valid ground-truth sequence is allowed; every dropped required argument is blocked. This is the defensible guarantee.
-- **Fabricated values: now mostly caught.** Grounding flags values that appear nowhere in the request, specs, or prior results (~0.85 recall, from ~0). Derived values, translations and computations, account for the flagged valid runs, so violations surface as warnings and the run continues. (`examples/grounding_eval.py`)
-- **The "0 false positives" guarantee is only as safe as your rules.** Required-param rules are mechanically certain, so they never misfire. _Mined_ dependencies raise recall on ordering but reintroduce false positives (they capture correlation rather than causation), so add them with eyes open.
+The competence boundary: structural errors are the defensible guarantee — every valid sequence allowed, every dropped required argument blocked. Grounding lifts fabricated-value recall from ~0 to ~0.85 (derived values — translations, computations — are the blind spot, surfaced as warnings). And the "0 false positives" claim is only as safe as your rules: required-param rules never misfire, but _mined_ dependencies trade recall for some false positives (correlation, not causation), so add them with eyes open.
 
 ## API surface
 
