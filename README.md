@@ -8,7 +8,7 @@ Every check is computed from your recorded execution state and generated automat
 
 ## The idea
 
-In his _Tractatus_ (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt is that idea as a gate: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them. The gate checks the rules themselves, too, so it can also flag a rule that guards against nothing or a rulebook that quietly contradicts itself.
+In his _Tractatus_ (1921), Wittgenstein argues that a statement's content is the set of possibilities it rules out. witt turns that premise in a log gate for agents: your rules mark certain situations as off-limits, and before any action it checks whether the move you're about to make lands in one of them.
 
 ## Why
 
@@ -121,12 +121,11 @@ See `examples/agent_loop.py` for a runnable version.
 
 ## Try it live (MCP server)
 
-`mcp_server.py` exposes the gate as MCP tools, so you or an agent can walk a real scenario and watch each call get allowed or blocked with the exact feedback an LLM would receive. It's a demo surface: in production witt is middleware the harness runs before every tool call, rather than a tool the model chooses.
-
-```bash
+`mcp_server.py` exposes the gate as a set of MCP tools.
 pip install -e ".[mcp]"
-python mcp_server.py     # stdio transport
-```
+python mcp_server.py # stdio transport
+
+````
 
 Register with any MCP client (`.mcp.json` for Claude Code):
 
@@ -139,7 +138,7 @@ Register with any MCP client (`.mcp.json` for Claude Code):
     }
   }
 }
-```
+````
 
 Tools: `configure` (build rules from tool specs), `check` (the gate), `record_success`, `confirm`, `audit`, `state`, `reset`.
 
