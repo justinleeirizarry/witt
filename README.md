@@ -53,6 +53,8 @@ gate.check("summarize").allowed   # True
 2. **Confirmations** — tools whose _name_ contains a destructive verb (`delete`, `send`, `pay`, `book`, …) require **per-tool** confirmation. Confirming one action never authorizes another, and `record_success` consumes the confirmation so the next call must re-confirm. Confirm via `gate.confirm("delete_record")` (or `gate.confirm()` for the tool just checked).
 3. **Dependencies** — from the `dependencies` argument, or mined from traces with `infer_dependencies_from_traces()` (correlation-based; review before using as hard gates).
 
+**Confirmation is human-in-the-loop.** A destructive call stays blocked until `gate.confirm(tool)` is called, which is meant to represent a human (or a policy) approving the action — not the model approving itself. In a fully autonomous loop, route that block to a real approver; or if you auto-approve, say so in the feedback you return (e.g. `"approved — retry"`), otherwise the model reads "requires user confirmation" and tries to _obtain_ it instead of retrying.
+
 It also couples `Done_X ↔ Result_X` (the `StateTracker` sets both on success), so a state with one but not the other is flagged as _impossible_ — a stronger signal than an ordinary rule violation. Free at runtime, and disable-able with `model_state_space=False`.
 
 ### Argument binding
@@ -160,10 +162,12 @@ Recall per error class (train/test split; some simulators are stochastic, so run
 | Missing required argument (structural) | **~0.96**       | ~0.96                | **~0.98**       |
 | Wrong-but-valid value (semantic)       | ~0.00           | ~0.20                | **~0.85**       |
 | Reordered / missing prerequisite       | ~0.00           | ~0.28                | ~0.29           |
-| Swapped tool                           | ~0.7            | ~0.9                 | ~0.78           |
+| Swapped tool                           | ~0.63           | ~0.74                | ~0.83           |
 | **Valid ground-truth runs flagged**    | **0**           | ~15-20%              | ~20% (warnings) |
 
 The competence boundary: structural errors are the defensible guarantee — every valid sequence allowed, every dropped required argument blocked. Grounding lifts fabricated-value recall from ~0 to ~0.85 (derived values — translations, computations — are the blind spot, surfaced as warnings). And the "0 false positives" claim is only as safe as your rules: required-param rules never misfire, but _mined_ dependencies trade recall for some false positives (correlation, not causation), so add them with eyes open.
+
+**A live agent, gated by the real library.** `examples/live_agent_gated.py` runs a live model in a tool-use loop with every call checked by the actual `Supervisor`. On a refund task, argument binding blocked every refund the model issued on an order it never verified (6/0 across trials) with no drop in task success (9/9 gated and ungated). The gate enforces a safety invariant the raw model violates, and each block converts to a correction.
 
 ## API surface
 
