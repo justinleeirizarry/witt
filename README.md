@@ -101,6 +101,29 @@ gate.record_success("get_stock_info", result=response)  # results feed the corpu
 
 The default `warn` mode surfaces ungrounded values in the feedback without blocking; use `strict` where every legitimate value provably comes from the corpus.
 
+#### Scopes: which source a value must come from
+
+The corpus is kept as named **sources** — `user`, `specs:get_order`, `config:filesystem`, and one per tool result (`lookup_contact#1`) — so every check reports where each argument came from:
+
+```python
+verdict.provenance   # {"to": ["read_inbox#1", "lookup_contact#1"]}
+```
+
+That matters because "appears somewhere" is a weak question. An address the agent picked up from a phishing message in the inbox grounds a `send_email` exactly as well as one from the contact lookup: the value is real, only its provenance is wrong. A `scope` names the sources a parameter may draw from:
+
+```python
+g = Grounding(user_text=request, tool_specs=tools,
+              scopes={"send_email": {"to": ["lookup_contact"]}})
+
+gate.record_success("read_inbox", result=inbox)     # spoofed address enters the corpus
+gate.check("send_email", params={"to": SPOOFED, ...}).allowed
+# → False: "value comes from ['read_inbox#1'], but must be grounded in ['lookup_contact']"
+```
+
+Use `"*"` as the tool key to scope a parameter everywhere it appears. Unlike plain ungroundedness — a heuristic, hence `warn` by default — a scope is a constraint you authored, so **scope violations block in either mode**, the same standing as an argument binding. This is the output-side counterpart to `bindings`: a binding ties an argument to a prior call's *argument*, a scope ties it to a prior call's *result*.
+
+`infer_scopes_from_logs(logs)` mines scopes from the provenance recorded on runs you know to be correct, mirroring `infer_dependencies_from_traces`. Same caveat, doubled: a source that never came up in the sample gets excluded and will misfire later. See `examples/scoped_grounding.py` and `examples/scoped_grounding_eval.py`.
+
 ### The agent loop
 
 ```python
@@ -165,6 +188,8 @@ Recall per error class (train/test split; some simulators are stochastic, so run
 | Swapped tool                           | ~0.63           | ~0.74                | ~0.83           |
 | **Valid ground-truth runs flagged**    | **0**           | ~15-20%              | ~20% (warnings) |
 
+**Scopes catch what flat grounding structurally cannot.** The four mutators above break a value by inventing one (`DECOY_x`, `n+7`), so it appears in no source and any corpus check catches it. The failure agents actually commit is the other one — a real value from the wrong place, which occurs in the corpus and so passes. A fifth rule-blind mutator that substitutes a genuine value from elsewhere in the same task (`reuse_value`) isolates it, and flat grounding catches **0.24**. Mined scopes take that to **0.33** at the permissive default for one extra false positive (18→19 of 86 valid runs), and to **0.49** when the mining threshold is tightened, at 31/86. Recall is bought with false positives at a steepening rate — the mined-dependency trade again. Declared scopes make no such trade. (`examples/scoped_grounding_eval.py`)
+
 The competence boundary: structural errors are the defensible guarantee — every valid sequence allowed, every dropped required argument blocked. Grounding lifts fabricated-value recall from ~0 to ~0.85 (derived values — translations, computations — are the blind spot, surfaced as warnings). And the "0 false positives" claim is only as safe as your rules: required-param rules never misfire, but _mined_ dependencies trade recall for some false positives (correlation, not causation), so add them with eyes open.
 
 **A live agent, gated by the real library.** `examples/live_agent_gated.py` runs a live model in a tool-use loop with every call checked by the actual `Supervisor`. On a refund task, argument binding blocked every refund the model issued on an order it never verified (6/0 across trials) with no drop in task success (9/9 gated and ungated). The gate enforces a safety invariant the raw model violates, and each block converts to a correction.
@@ -179,8 +204,10 @@ The competence boundary: structural errors are the defensible guarantee — ever
 | `Supervisor`                     | the gate: `check`, `record_success`, `record_failure`, `confirm`, `unconfirm`, `stats`, `audit`; enforces argument `bindings` (`verdict.binding_violations`); `Supervisor(engine, strict=True)` fails at construction on a contradictory ruleset |
 | `StateTracker`                   | execution state: `set`, `on_tool_success`, `completed_with`, `snapshot`, `history`                                                                                                                                                               |
 | `generate_rules`                 | tool specs → engine; accepts `dependencies`, `require_confirmation`, `bindings`                                                                                                                                                                  |
+| `Grounding`                      | fabricated-argument detection over a sourced corpus: `observe`, `observe_result`, `sources`, `where_grounded`, `is_grounded`, `check`, `ungrounded`, `scope_for`; `Grounding(scopes=…)` restricts a parameter to named sources (`verdict.provenance`, `verdict.grounding_violations`) |
 | `infer_dependencies_from_traces` | mine ordering constraints from logs                                                                                                                                                                                                              |
-| `normalize_bindings`             | canonicalize the `bindings` argument                                                                                                                                                                                                             |
+| `infer_scopes_from_logs`         | mine parameter scopes from the provenance recorded on valid runs                                                                                                                                                                                 |
+| `normalize_bindings` / `normalize_scopes` | canonicalize the `bindings` / `scopes` arguments                                                                                                                                                                                        |
 
 `validate_closed` (closed-world: absent fact = false) is what agent validation uses. `validate` (open-world: absent fact = free variable) is for pure logic checking; e.g. `check_entailment` correctly flags affirming-the-consequent and other fallacies.
 

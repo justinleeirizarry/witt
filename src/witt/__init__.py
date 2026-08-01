@@ -25,7 +25,12 @@ grounding enabled. Engine cross-checked against z3 on 1,500 formulas.
 
 from .engine import TruthTableEngine
 from .state import StateTracker
-from .grounding import Grounding
+from .grounding import (
+    Grounding,
+    GroundingViolation,
+    infer_scopes_from_logs,
+    normalize_scopes,
+)
 from .supervisor import Supervisor, Verdict, ContradictoryRuleset
 from .autogen import (
     generate_rules,
@@ -40,6 +45,9 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Grounding",
+    "GroundingViolation",
+    "infer_scopes_from_logs",
+    "normalize_scopes",
     "TruthTableEngine",
     "StateTracker",
     "Supervisor",

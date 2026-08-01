@@ -36,6 +36,10 @@ class Verdict:
     space_violations: list[str] = field(default_factory=list)
     binding_violations: list[str] = field(default_factory=list)
     grounding_violations: list[str] = field(default_factory=list)
+    # Where each checkable argument came from: {param: [source_id, ...]}.
+    # Empty list = grounded nowhere. Populated when a Grounding with
+    # track_provenance (the default) is attached.
+    provenance: dict = field(default_factory=dict)
     feedback: str = ""
     latency_us: float = 0.0
 
@@ -132,12 +136,14 @@ class Supervisor:
         # Argument binding is object identity rather than logical structure — it
         # runs alongside the boolean engine, on the actual argument values.
         binding_violations = self._binding_violations(tool_name, params)
-        grounding_violations = []
+        ungrounded, out_of_scope, provenance = [], [], {}
         if self.grounding is not None:
-            grounding_violations = [
-                f"{tool_name}({p}={v!r}): value appears nowhere in user "
-                f"request, tool specs, or prior results — possibly fabricated"
-                for p, v in self.grounding.ungrounded(params)]
+            found, provenance = self.grounding.check(tool_name, params)
+            for gv in found:
+                msg = gv.message(tool_name)
+                (out_of_scope if gv.kind == "out_of_scope"
+                 else ungrounded).append(msg)
+        grounding_violations = ungrounded + out_of_scope
         latency = (time.perf_counter() - t0) * 1_000_000
 
         space_violations = result.get("space_violations", [])
@@ -150,13 +156,18 @@ class Supervisor:
             # The state itself is impossible: an incoherent world rather
             # than a forbidden action. Distinct signal, distinct fix.
             msgs.append("Incoherent state: " + "; ".join(space_violations))
-        if grounding_violations:
+        if ungrounded:
             label = ("Blocked (ungrounded)" if self.grounding.mode == "strict"
                      else "Warning (ungrounded)")
-            msgs.append(label + ": " + "; ".join(grounding_violations))
+            msgs.append(label + ": " + "; ".join(ungrounded))
+        if out_of_scope:
+            # A declared scope is an authored constraint rather than a
+            # heuristic, so it blocks in either mode — same standing as an
+            # argument binding.
+            msgs.append("Blocked (out of scope): " + "; ".join(out_of_scope))
 
-        blocked_by_grounding = bool(grounding_violations) and \
-            self.grounding is not None and self.grounding.mode == "strict"
+        blocked_by_grounding = bool(out_of_scope) or (
+            bool(ungrounded) and self.grounding.mode == "strict")
         verdict = Verdict(
             allowed=result["valid"] and not binding_violations
                     and not blocked_by_grounding,
@@ -164,6 +175,7 @@ class Supervisor:
             space_violations=space_violations,
             binding_violations=binding_violations,
             grounding_violations=grounding_violations,
+            provenance=provenance,
             feedback=" | ".join(msgs),
             latency_us=latency,
         )
@@ -172,6 +184,7 @@ class Supervisor:
             "tool": tool_name,
             "allowed": verdict.allowed,
             "violations": verdict.violations,
+            "provenance": provenance,
             "latency_us": latency,
         })
         return verdict
@@ -212,8 +225,10 @@ class Supervisor:
             params = self._last_params.get(tool_name)
         self.state.on_tool_success(tool_name, extra_state, params)
         if self.grounding is not None and result is not None:
-            # Tool output becomes legitimate grounding for later values.
-            self.grounding.observe(result)
+            # Tool output becomes legitimate grounding for later values,
+            # recorded under this call's own source id so later checks can
+            # say which call a value came from.
+            self.grounding.observe_result(tool_name, result)
         self.state.set(confirm_prop(tool_name), False)
         return self
 
